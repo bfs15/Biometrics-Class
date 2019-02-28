@@ -28,7 +28,7 @@ def get_images_and_labels(path):
     labels = []
     for image_path in image_paths:
         # Read the image and convert to grayscale
-        print 'image: {0}'.format(image_path)
+        print('image: {0}'.format(image_path))
         image_pil = Image.open(image_path).convert('L')
         # Convert the image format into numpy array
         image = np.array(image_pil, 'uint8')
@@ -55,16 +55,16 @@ def get_images_and_labels(path):
 path = '/home/menotti/databases/yalefaces'
 # Call the get_images_and_labels function and get the face images and the
 # corresponding labels
-print 'loading yalefaces database'
+print('loading yalefaces database')
 images, labels = get_images_and_labels(path)
 cv2.destroyAllWindows()
 
 # Perform the tranining
-##print 'training LBPHistogram FaceRecognizer'
+##print('training LBPHistogram FaceRecognizer')
 ##recognizer1.train(images, np.array(labels))
-print 'training Eigen FaceRecognizer'
+print('training Eigen FaceRecognizer')
 recognizer2.train(images, np.array(labels))
-print 'training Fisher FaceRecognizer'
+print('training Fisher FaceRecognizer')
 recognizer3.train(images, np.array(labels))
 
 
@@ -84,17 +84,17 @@ for image_path in image_paths:
     nbr_actual = int(os.path.split(image_path)[
                      1].split(".")[0].replace("subject", ""))
 #    if nbr_actual == nbr_predicted1:
-#       print "{} is Correctly Recognized with confidence {}".format(nbr_actual, conf1)
+#       print("{} is Correctly Recognized with confidence {}".format(nbr_actual, conf1))
 #   else:
-#       print "{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted1)
+#       print("{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted1))
     if nbr_actual == nbr_predicted2:
-        print "{} is Correctly Recognized with confidence {}".format(nbr_actual, conf2)
+        print("{} is Correctly Recognized with confidence {}".format(nbr_actual, conf2))
     else:
-       print "{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted2)
+       print("{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted2))
     if nbr_actual == nbr_predicted3:
-       print "{} is Correctly Recognized with confidence {}".format(nbr_actual, conf3)
+       print("{} is Correctly Recognized with confidence {}".format(nbr_actual, conf3))
     else:
-       print "{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted3)
+       print("{} is Incorrect Recognized as {}".format(nbr_actual, nbr_predicted3))
 
     cv2.imshow("Recognizing Face", predict_image)  # [y: y + h, x: x + w])
     cv2.waitKey(1000)
