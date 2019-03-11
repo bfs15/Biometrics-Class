@@ -9,7 +9,6 @@ from PIL import Image
 cascadePath = "haarcascade_frontalface_default.xml"
 faceCascade = cv2.CascadeClassifier(cascadePath)
 
-
 # load(path, ["gif", "jpeg"], True)
 # loads gifs and jpegs
 # load(path, ["png", "jpeg"], False)
@@ -22,7 +21,7 @@ def load(path, filters=[], include=True):
 
    for filename in os.listdir(path):
       ## Filters files not supposed to open
-      
+
       # default only open if extension is in the filters array
       # (open .gif and .jpeg if filters == ["gif", "jpeg"])
       openImage = False
