@@ -52,7 +52,7 @@ def get_images_and_labels(path):
 
 
 # Path to the Yale Dataset
-path = '/home/menotti/databases/yalefaces'
+path = 'yalefaces'
 # Call the get_images_and_labels function and get the face images and the
 # corresponding labels
 print('loading yalefaces database')
