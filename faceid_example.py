@@ -46,7 +46,7 @@ def get_images_and_labels(path):
             labels.append(nbr)
             cv2.imshow("Adding faces to traning set...",
                        image[y: y + h, x: x + w])
-            cv2.waitKey(50)
+            cv2.waitKey(1)
     # return the images list and labels list
     return images, labels
 

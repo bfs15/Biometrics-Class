@@ -10,19 +10,36 @@ cascadePath = "haarcascade_frontalface_default.xml"
 faceCascade = cv2.CascadeClassifier(cascadePath)
 
 
-def load(path, filters=[]):
+# load(path, ["gif", "jpeg"], True)
+# loads gifs and jpegs
+# load(path, ["png", "jpeg"], False)
+# loads everything except "png" and "jpeg"
+def load(path, filters=[], include=True):
    # face images array
    images = []
    # subject number array
    labels = []
 
    for filename in os.listdir(path):
-      openImage = True
+      ## Filters files not supposed to open
+      
+      # default only open if extension is in the filters array
+      # (open .gif and .jpeg if filters == ["gif", "jpeg"])
+      openImage = False
+
+      if not include:  # default open every file except those in the filters
+         # (does NOT open .gif and .jpeg if filters == ["gif", "jpeg"])
+         openImage = True
+
       for fil in filters:
          if filename.endswith(fil):
-            openImage = False
+            # if found in filter, do opposite of default behaviour
+            openImage = not openImage
+      
       if not openImage:
          continue
+
+      ## Load image
 
       image_path = os.path.join(path, filename)
       # Load image and convert to grayscale
