@@ -13,7 +13,7 @@ faceCascade = cv2.CascadeClassifier(cascadePath)
 # loads gifs and jpegs
 # load(path, ["png", "jpeg"], False)
 # loads everything except "png" and "jpeg"
-def load(path, filters=[], include=True):
+def load(path, filters=[], include=False):
    # face images array
    images = []
    # subject number array
