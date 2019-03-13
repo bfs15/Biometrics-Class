@@ -3,11 +3,14 @@ import cv2
 import os
 import numpy as np
 from PIL import Image
+from sklearn.metrics import accuracy_score
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 import yalefaces
 import ORLfaces
 
-class EigenFaceRecognizer(object):
+
+class EigenFaceRecognizer(BaseEstimator, ClassifierMixin):
 	def __init__(self):
 		super(EigenFaceRecognizer, self).__init__()
 
@@ -54,10 +57,26 @@ class EigenFaceRecognizer(object):
 		eigenvalues = eigenvalues[indices]
 		self.eigenvectors = self.eigenvectors[:, indices]
 
+
 		# include only the most relevant eigenvectors
-		evalues_count = 5
-		eigenvalues = eigenvalues[0:evalues_count]
-		self.eigenvectors = self.eigenvectors[:, 0:evalues_count]
+		eigenvalues_count = 5
+		# include only the first k evectors/values so
+		# that they include approx. 85% of the energy
+		# evalues_sum = sum(eigenvalues[:])
+		# eigenvalues_count = 0
+		# evalues_energy = 0.0
+		# energy = 0.85
+		# for evalue in eigenvalues:
+		# 	eigenvalues_count += 1
+		# 	evalues_energy += evalue / evalues_sum
+
+		# 	if evalues_energy >= energy:
+		# 		break
+
+		# print('using ', eigenvalues_count, 'evalues')
+
+		eigenvalues = eigenvalues[0:eigenvalues_count]
+		self.eigenvectors = self.eigenvectors[:, 0:eigenvalues_count]
 
 		# get the true eigenvectors of matrixS (eigenfaces)
 		self.eigenvectors = matrixA * self.eigenvectors
@@ -68,8 +87,11 @@ class EigenFaceRecognizer(object):
 
 		# computing the weights
 		self.W = self.eigenvectors.transpose() * matrixA
+	
+	def fit(self, X, y=None):
+		self.train(X, y)
 
-	def predict(self, face):
+	def predict_single(self, face):
 		# turn image matrix into a single column
 		col_face = np.array(face, dtype='float64').flatten()
 		# subtract mean
@@ -84,15 +106,27 @@ class EigenFaceRecognizer(object):
 		norms = np.linalg.norm(dist, axis=0)
 		closest_face_id = np.argmin(norms)
 		# return the faceid (1..40)
-		return labels[closest_face_id]
+		return self.labels[closest_face_id]
 
-print('loading database')
-# Path to the Yale Dataset
-path = 'yalefaces'
-# images, labels = yalefaces.load(path, ["sad"], False)
-images, labels = ORLfaces.load()
+	def predict(self, faces):
+		y_pred = []
+		for face in faces:
+			y_pred.append(self.predict_single(face))
+		return y_pred
 
-recognizer = EigenFaceRecognizer()
-recognizer.train(images, labels)
+	def score(self, X, y):
+		y_pred = self.predict(X)
+		return accuracy_score(y_pred, y)
 
-print(recognizer.predict(images[25]))
+if __name__ == "__main__":
+	print('loading database')
+	# Path to the Yale Dataset
+	path = 'yalefaces'
+	images, labels = yalefaces.load(path, ["sad"], False)
+	# images, labels = ORLfaces.load()
+
+	recognizer = EigenFaceRecognizer()
+	recognizer.train(images, labels)
+
+	for image, label in zip(images, labels):
+		print(recognizer.predict_single(image), '==', label)

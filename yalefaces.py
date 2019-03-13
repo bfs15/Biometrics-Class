@@ -39,6 +39,7 @@ def load(path = 'yalefaces', filters=[], include=False):
          continue
 
       ## Load image
+      resolution = (150, 150)
 
       image_path = os.path.join(path, filename)
       # Load image and convert to grayscale
@@ -53,7 +54,7 @@ def load(path = 'yalefaces', filters=[], include=False):
       # If face is detected, append the face to images and the label to labels
       for (x, y, w, h) in faces:
          face = image[y: y + h, x: x + w]
-         face = cv2.resize(face, dsize=(160, 160), interpolation=cv2.INTER_CUBIC)
+         face = cv2.resize(face, dsize=resolution, interpolation=cv2.INTER_CUBIC)
          images.append(face)
          labels.append(label)
          # cv2.imshow("Loading faces... " + str(label), face)
