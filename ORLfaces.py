@@ -26,7 +26,7 @@ def load(path='orl_faces'):
          subject_paths) if f.endswith('.pgm') and os.path.isfile(os.path.join(subject_paths, f))]
 
       for image_path in subject_path:
-         print('load: {0}'.format(image_path))
+         # print('load: {0}'.format(image_path))
          # Read the image and convert to grayscale
          image_pil = Image.open(image_path).convert('L')
          # Convert the image format into numpy array

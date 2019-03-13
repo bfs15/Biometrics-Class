@@ -31,7 +31,7 @@ def load(path = 'yalefaces', filters=[], include=False):
          openImage = True
 
       for fil in filters:
-         if filename.endswith(fil):
+         if filename.endswith('.' + fil):
             # if found in filter, do opposite of default behaviour
             openImage = not openImage
       
@@ -42,7 +42,7 @@ def load(path = 'yalefaces', filters=[], include=False):
 
       image_path = os.path.join(path, filename)
       # Load image and convert to grayscale
-      print('load: {0}'.format(image_path))
+      # print('load: {0}'.format(image_path))
       image_pil = Image.open(image_path).convert('L')
       # Convert the image format into numpy array
       image = np.array(image_pil, 'uint8')

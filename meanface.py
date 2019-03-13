@@ -86,12 +86,9 @@ class EigenFaceRecognizer(object):
 		# return the faceid (1..40)
 		return labels[closest_face_id]
 
-
+print('loading database')
 # Path to the Yale Dataset
 path = 'yalefaces'
-# Call the get_images_and_labels function and get the face images and the
-# corresponding labels
-print('loading yalefaces database')
 # images, labels = yalefaces.load(path, ["sad"], False)
 images, labels = ORLfaces.load()
 
