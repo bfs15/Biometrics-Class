@@ -7,7 +7,7 @@ from PIL import Image
 
 # For face detection we will use the Haar Cascade provided by OpenCV.
 cascadePath = "haarcascade_frontalface_default.xml"
-faceCascade = cv2.CascadeClassifier(cascadePath)
+faceDetector = cv2.CascadeClassifier(cascadePath)
 
 # To load gifs and jpegs
 # load(path, ["gif", "jpeg"], True)
@@ -49,7 +49,7 @@ def load(path = 'yalefaces', filters=[], include=False):
       # Extract label from filename (subject number)
       label = int(filename.split(".")[0].replace("subject", ""))
       # Detect the face in the image
-      faces = faceCascade.detectMultiScale(image)
+      faces = faceDetector.detectMultiScale(image)
       # If face is detected, append the face to images and the label to labels
       for (x, y, w, h) in faces:
          face = image[y: y + h, x: x + w]

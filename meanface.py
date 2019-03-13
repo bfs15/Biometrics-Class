@@ -1,8 +1,11 @@
-import yalefaces
+
 import cv2
 import os
 import numpy as np
 from PIL import Image
+
+import yalefaces
+import ORLfaces
 
 class EigenFaceRecognizer(object):
 	def __init__(self):
@@ -89,8 +92,10 @@ path = 'yalefaces'
 # Call the get_images_and_labels function and get the face images and the
 # corresponding labels
 print('loading yalefaces database')
-images, labels = yalefaces.load(path, ["sad"], False)
+# images, labels = yalefaces.load(path, ["sad"], False)
+images, labels = ORLfaces.load()
 
 recognizer = EigenFaceRecognizer()
 recognizer.train(images, labels)
-recognizer.predict(images[25])
+
+print(recognizer.predict(images[25]))
