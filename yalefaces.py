@@ -56,6 +56,8 @@ def load(path = 'yalefaces', filters=[], include=False):
          face = cv2.resize(face, dsize=(160, 160), interpolation=cv2.INTER_CUBIC)
          images.append(face)
          labels.append(label)
+         # cv2.imshow("Loading faces... " + str(label), face)
+         # cv2.waitKey(1)
    return images, labels
 
 if __name__ == "__main__":
