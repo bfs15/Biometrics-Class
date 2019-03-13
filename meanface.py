@@ -8,70 +8,80 @@ class EigenFaceRecognizer(object):
 	def __init__(self):
 		super(EigenFaceRecognizer, self).__init__()
 
-	def meanface(self, images):
-		mean = np.zeros(images[0].shape)
+	def mean_face(self, images):
+		mean_face = np.zeros(images[0].shape)
 
 		for face in images:
-			mean += face.astype(float)
+			mean_face += face.astype(float)
 
-		mean = mean / len(images)
-		# print(mean)
-		# mean = np.array(mean, 'uint8')
-		# cv2.imshow("meanface >:( ", mean)
-		# cv2.waitKey(250)
-		return mean
+		mean_face = mean_face / len(images)
+		return mean_face
 
-	def train(self, images):
-		mean = self.meanface(images)
+	def train(self, images, labels):
+		self.labels = labels
+		# Calculate mean face
+		mean = self.mean_face(images)
+
+		# Change images and mean to a single column of size m*n, instead of a matrix m x n
 		col_images = []
 		for image in images:
 			col_images.append([pixel for line in image for pixel in line])
+		
+		self.mean_col_face = [pixel for line in mean for pixel in line]
+		# save resolution size
+		self.resolution = len(self.mean_col_face)
 
-		col_mean = [pixel for line in mean for pixel in line]
-
-		normalized = []
+		# Calculate image - mean for all images
+		matrixA = []
 		for image in col_images:
-			normalized.append(np.array(image) - np.array(col_mean))
+			matrixA.append(np.array(image) - np.array(self.mean_col_face))
 
-		normalized = np.array(normalized)
-		l = normalized.shape[0]
-		mn = normalized.shape[1]
+		# each column is a face
+		# matrix of shape (len(images), resolution)
+		matrixA = np.matrix(matrixA).T
+		# Calculate covariance matrix
+		matrixS = matrixA.T * matrixA
+		matrixS /= len(matrixA)
 
-		S = np.matrix(normalized.transpose()) * np.matrix(normalized)
-		S /= len(normalized)
-		print(S)
-		###
+		# calculate eigenvalues, eigenvectors
+		eigenvalues, self.eigenvectors = np.linalg.eig(matrixS)
+		# Get sorted indices
+		indices = eigenvalues.argsort()[::-1]
+		# Using indices to sort values and vectors
+		eigenvalues = eigenvalues[indices]
+		self.eigenvectors = self.eigenvectors[:, indices]
 
-		# self.evalues, self.evectors = np.linalg.eig(S)                          # eigenvectors/values of the covariance matrix
-		# sort_indices = self.evalues.argsort()[::-1]                             # getting their correct order - decreasing
-		# self.evalues = self.evalues[sort_indices]                               # puttin the evalues in that order
-		# self.evectors = self.evectors[:,sort_indices]                             # same for the evectors
+		# include only the most relevant eigenvectors
+		evalues_count = 5
+		eigenvalues = eigenvalues[0:evalues_count]
+		self.eigenvectors = self.eigenvectors[:, 0:evalues_count]
 
-		# evalues_sum = sum(self.evalues[:])                                      # include only the first k evectors/values so
-		# evalues_count = 0                                                       # that they include approx. 85% of the energy
-		# evalues_energy = 0.0
-		# for evalue in self.evalues:
-		#     evalues_count += 1
-		#     evalues_energy += evalue / evalues_sum
+		# get the true eigenvectors of matrixS (eigenfaces)
+		self.eigenvectors = matrixA * self.eigenvectors
+		# find the norm of each eigenvector
+		norms = np.linalg.norm(self.eigenvectors, axis=0)
+		# normalize each eigenvectors
+		self.eigenvectors = self.eigenvectors / norms
 
-		#     if evalues_energy >= self.energy:
-		#         break
+		# computing the weights
+		self.W = self.eigenvectors.transpose() * matrixA
 
-		# self.evalues = self.evalues[0:evalues_count]                            # reduce the number of eigenvectors/values to consider
-		# self.evectors = self.evectors[:,0:evalues_count]
+	def predict(self, face):
+		# turn image matrix into a single column
+		col_face = np.array(face, dtype='float64').flatten()
+		# subtract mean
+		col_face -= self.mean_col_face
+		# transpose
+		col_face = np.reshape(col_face, (self.resolution, 1))
+		# project onto the Eigenspace, to find out the weights
+		proj = self.eigenvectors.T * col_face
 
-		# #self.evectors = self.evectors.transpose()                                # change eigenvectors from rows to columns (Should not transpose) 
-		# self.evectors = L * self.evectors                                       # left multiply to get the correct evectors
-		# norms = np.linalg.norm(self.evectors, axis=0)                           # find the norm of each eigenvector
-		# self.evectors = self.evectors / norms                                   # normalize all eigenvectors
-
-		# self.W = self.evectors.transpose() * L                                  # computing the weights
-
-
-
-
-	def predict(face):
-		return 0
+		# calculate distance to each face ||w - pk||
+		dist = self.W - proj
+		norms = np.linalg.norm(dist, axis=0)
+		closest_face_id = np.argmin(norms)
+		# return the faceid (1..40)
+		return labels[closest_face_id]
 
 
 # Path to the Yale Dataset
@@ -82,29 +92,5 @@ print('loading yalefaces database')
 images, labels = yalefaces.load(path, ["sad"], False)
 
 recognizer = EigenFaceRecognizer()
-recognizer.train(images)
-
-def eigenFaces(self,_Ml):
-	self.Ml = _Ml
-
-	M = len(self.images)
-	iH,iW = self.images[0].shape
-	N2 = iH * iW
-
-	mI = np.ravel(np.asarray(self.images)).reshape(M,-1).T #[NxM], N^2 = WxH
-
-	N2,M = mI.shape
-	mA = mI - np.average(mI,axis=1).reshape(-1,1)  #[N2xM]
-	mC = np.dot(mA.T,mA) # [M,M] = [M,N2].[N2,M]
-
-	evals, evects = npla.eig(mC) # [M,nV] -- A^T A
-	evects = np.real(evects)
-	eord = np.argsort(evals); eord[:] = eord[::-1] # index of sorted eigenvalues
-#
-	# ==> [mU] = [N2,Ml] = [N2,M].[M,Ml] 
-	mU = np.dot( mA , evects[:,eord[range(self.Ml)]] )
-	# normalization of eigenface to unity	
-	for i in xrange(self.Ml):
-		mU[:,i] = mU[:,i] / npla.norm(mU[:,i])
-
-	return mU
+recognizer.train(images, labels)
+recognizer.predict(images[25])

@@ -9,11 +9,11 @@ from PIL import Image
 cascadePath = "haarcascade_frontalface_default.xml"
 faceCascade = cv2.CascadeClassifier(cascadePath)
 
+# To load gifs and jpegs
 # load(path, ["gif", "jpeg"], True)
-# loads gifs and jpegs
+# To load everything except "png" and "jpeg"
 # load(path, ["png", "jpeg"], False)
-# loads everything except "png" and "jpeg"
-def load(path, filters=[], include=False):
+def load(path = 'yalefaces', filters=[], include=False):
    # face images array
    images = []
    # subject number array
