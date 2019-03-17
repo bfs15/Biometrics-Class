@@ -10,7 +10,8 @@ from PIL import Image
 cascadePath = "haarcascade_frontalface_default.xml"
 faceCascade = cv2.CascadeClassifier(cascadePath)
 
-## For face recognition we will the the LBPH Face Recognizer
+## face recognition algorithms
+
 #recognizer1 = cv2.createLBPHFaceRecognizer()
 recognizer2 = cv2.createEigenFaceRecognizer()
 recognizer3 = cv2.createFisherFaceRecognizer()

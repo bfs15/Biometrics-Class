@@ -34,7 +34,7 @@ def load(path='orl_faces'):
          faces = faceDetector.detectMultiScale(image)
          for (x, y, w, h) in faces:
             face = image[y: y + h, x: x + w]
-            face = cv2.resize(face, dsize=(160, 160), interpolation=cv2.INTER_CUBIC)
+            face = cv2.resize(face, dsize=(150, 150), interpolation=cv2.INTER_CUBIC)
             images.append(face)
             labels.append(label)
             # cv2.imshow("Loading faces... " + str(label), face)

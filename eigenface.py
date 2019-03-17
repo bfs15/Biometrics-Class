@@ -28,6 +28,9 @@ class EigenFaceRecognizer(BaseEstimator, ClassifierMixin):
 		# Calculate mean face
 		mean = self.mean_face(images)
 
+		# Save mean face image
+		# cv2.imwrite("Meanface" + ".jpg", mean)
+
 		# Change images and mean to a single column of size m*n, instead of a matrix m x n
 		col_images = []
 		for image in images:
@@ -57,23 +60,22 @@ class EigenFaceRecognizer(BaseEstimator, ClassifierMixin):
 		eigenvalues = eigenvalues[indices]
 		self.eigenvectors = self.eigenvectors[:, indices]
 
-
 		# include only the most relevant eigenvectors
 		eigenvalues_count = 5
 		# include only the first k evectors/values so
 		# that they include approx. 85% of the energy
-		# evalues_sum = sum(eigenvalues[:])
+		# eigenvalues_sum = sum(eigenvalues[:])
 		# eigenvalues_count = 0
-		# evalues_energy = 0.0
+		# eigenvalues_energy = 0.0
 		# energy = 0.85
-		# for evalue in eigenvalues:
+		# for value in eigenvalues:
 		# 	eigenvalues_count += 1
-		# 	evalues_energy += evalue / evalues_sum
+		# 	eigenvalues_energy += value / eigenvalues_sum
 
-		# 	if evalues_energy >= energy:
+		# 	if eigenvalues_energy >= energy:
 		# 		break
 
-		# print('using ', eigenvalues_count, 'evalues')
+		# print('using ', eigenvalues_count, 'eigenvalues')
 
 		eigenvalues = eigenvalues[0:eigenvalues_count]
 		self.eigenvectors = self.eigenvectors[:, 0:eigenvalues_count]
@@ -85,13 +87,26 @@ class EigenFaceRecognizer(BaseEstimator, ClassifierMixin):
 		# normalize each eigenvectors
 		self.eigenvectors = self.eigenvectors / norms
 
-		# computing the weights
-		self.W = self.eigenvectors.transpose() * matrixA
+		# Save Eigenface images
+		# self.write_eigenfaces()
+
+		# compute the projections
+		self.Proj = self.eigenvectors.T * matrixA
 	
 	def fit(self, X, y=None):
 		self.train(X, y)
 
-	def predict_single(self, face):
+	def write_eigenfaces(self):
+		for i, eigenvector in enumerate(self.eigenvectors.T):
+			eigenvector = np.real(eigenvector)
+			eigenvector = (eigenvector - np.amin(eigenvector)) / \
+	                            (np.amax(eigenvector)-np.amin(eigenvector))
+			eface = np.array(255*np.real(eigenvector), dtype=np.uint8)
+			eface = eface.reshape(150, 150)
+			cv2.imwrite("Eigenface " + str(i) + ".jpg", eface)
+			cv2.waitKey(1)
+
+	def predict(self, face):
 		# turn image matrix into a single column
 		col_face = np.array(face, dtype='float64').flatten()
 		# subtract mean
@@ -101,21 +116,21 @@ class EigenFaceRecognizer(BaseEstimator, ClassifierMixin):
 		# project onto the Eigenspace, to find out the weights
 		proj = self.eigenvectors.T * col_face
 
-		# calculate distance to each face ||w - pk||
-		dist = self.W - proj
+		# calculate distance to each face ||Proj - pk||
+		dist = self.Proj - proj
 		norms = np.linalg.norm(dist, axis=0)
 		closest_face_id = np.argmin(norms)
-		# return the faceid (1..40)
+		# return the label of the closest face
 		return self.labels[closest_face_id]
 
-	def predict(self, faces):
+	def predict_list(self, faces):
 		y_pred = []
 		for face in faces:
-			y_pred.append(self.predict_single(face))
+			y_pred.append(self.predict(face))
 		return y_pred
 
 	def score(self, X, y):
-		y_pred = self.predict(X)
+		y_pred = self.predict_list(X)
 		return accuracy_score(y_pred, y)
 
 if __name__ == "__main__":
@@ -129,4 +144,4 @@ if __name__ == "__main__":
 	recognizer.train(images, labels)
 
 	for image, label in zip(images, labels):
-		print(recognizer.predict_single(image), '==', label)
+		print(recognizer.predict(image), '==', label)
