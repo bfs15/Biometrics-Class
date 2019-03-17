@@ -72,7 +72,7 @@ if __name__ == "__main__":
    # Use a ten-fold cross-validation scheme and report the mean an stand deviation accuracies for the ORL database. Is there a statisical significance difference between the reported values?
 
    from sklearn.model_selection import train_test_split
-   from sklearn.model_selection import StratifiedKFold, cross_val_score
+   from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate
 
    images, labels = ORLfaces.load()
    # recognizer = eigenface.EigenFaceRecognizer()
@@ -80,19 +80,20 @@ if __name__ == "__main__":
 
    recognizer = eigenface.EigenFaceRecognizer()
    k_fold = StratifiedKFold(n_splits=10)
-   scores = cross_val_score(recognizer, images, labels, cv=k_fold, n_jobs=1)
+   scores = cross_validate(recognizer, images, labels, cv=k_fold, n_jobs=1)
    print(scores)
-   print('mean accuracy: ', np.array(scores).mean())
-   print('stddev: ', np.array(scores).std())
+   print('mean accuracy: ', np.array(scores['test_score']).mean())
+   print('stddev: ', np.array(scores['test_score']).std())
 
    scores1 = scores
 
    recognizer2 = cv2EigenFaceRecognizer()
    k_fold = StratifiedKFold(n_splits=10)
-   scores = cross_val_score(recognizer2, images, labels, cv=k_fold, n_jobs=1)
+   scores = cross_validate(recognizer2, images, labels, cv=k_fold, n_jobs=1)
    print(scores)
-   print('mean accuracy: ', np.array(scores).mean())
-   print('stddev: ', np.array(scores).std())
+   print('mean accuracy: ', np.array(scores['test_score']).mean())
+   print('stddev: ', np.array(scores['test_score']).std())
 
-   # print(stats.ttest_ind(scores1, scores1, equal_var=False))
+   print(stats.ttest_ind(scores1['test_score'],
+                         scores['test_score'], equal_var=False))
 

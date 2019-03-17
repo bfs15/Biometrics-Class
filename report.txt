@@ -10,6 +10,28 @@ different lightning images have the worst performance, different expressions are
 Comparing the implemented method to cv2's EigenFaceRecognizer utilizing Welch’s t-test, with the null hypothesis  that the averages are equal (p=0.01).
 We obtain pvalue = 1.27e-05 and so we reject the null hypothesis, the method implemented is not equal to cv2's.
 
+   # Provide a runtime analysis for training and testing?
+
+Train and test times on the ORL database 10 fold cross validation
+My implementation has a faster training and test times. Using only 5 eigenvectors helped, but affected the accuracy.
+
+My implementation
+   fit_time': array([1.00925779, 1.01834702, 1.05120468, 1.05718064, 1.07875562, 1.23162127, 1.31951165, 1.30763865, 1.29068565, 1.1576283])
+      mean: 1.152
+      std: 0.11859
+   score_time': array([0.04986668, 0.04889274, 0.0508647 , 0.04687524, 0.04822636, 0.04388261, 0.04188752, 0.03291154, 0.03091693, 0.02393508])
+      mean: 0.0418
+      std: 0.00886308
+
+cv2.EigenFaceRecognizer
+   fit_time': array([4.3460865 , 4.18502712, 4.46488404, 4.54302263, 4.37383175, 4.26951671, 4.47269917, 4.64629173, 4.70555472, 4.91293168])
+      mean: 4.491
+      std: 0.20719
+   score_time': array([0.38266706, 0.39571643, 0.37302399, 0.3540535 , 0.3460815 , 0.33812118, 0.30122352, 0.23793554, 0.22838974, 0.16767478])
+      mean: 0.3124
+      std: 0.07263490
+
+
 == Test results
 
 ## ORL database
