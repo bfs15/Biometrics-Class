@@ -1,6 +1,11 @@
 yalefaces/
 orl_faces/
 
+*.tar.gz
+CASIA-Iris-Lamp-100
+CASIA-IrisV4-Interval
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
