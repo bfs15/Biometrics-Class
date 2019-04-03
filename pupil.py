@@ -13,6 +13,9 @@ import numpy.linalg as npla
 import scipy.misc as spm
 import string
 
+# Wavelet
+import pywt
+
 from utils import bilinear_interpolation
 
 DBEyePath = "CASIA-Iris-Lamp-100"
@@ -349,11 +352,10 @@ def Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, wNorm=(64, 256)):
    # new polar image
    polar = np.zeros((lines, columns), dtype=np.uint8)
    for line, radius in enumerate(radii):
-      print(radius)
-      sys.stdout.flush()
       for col, angle in enumerate(angles):
          y = np.sin(angle) * (radius+pupilRadius) + pupilCenter[1]
          x = np.cos(angle) * (radius+pupilRadius) + pupilCenter[0]
+         ## interpolation
          i = int(mt.floor(y))
          j = int(mt.floor(x))
          pt00 = (i+0, j+0, imgEye[i+0][j+0])
@@ -361,8 +363,36 @@ def Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, wNorm=(64, 256)):
          pt10 = (i+1, j+0, imgEye[i+1][j+0])
          pt11 = (i+1, j+1, imgEye[i+1][j+1])
          polar[line][col]=bilinear_interpolation(y, x, [pt00, pt10, pt01, pt11])
+         ## no interpolation
          # polar[line][col] = imgEye[int(y)][int(x)]
    return polar
+
+def wavelet(image, levels):
+   # Wavelet transform of image, and plot approximation and details
+   decomposed = []
+   for i in range(levels):
+      coeffs2 = pywt.dwt2(image, 'haar')
+      LL, (LH, HL, HH) = coeffs2
+      image = LL
+      decomposed.append([LL, LH, HL, HH])
+## Display for user
+   # titles = ['Approximation', ' Horizontal detail',
+   #           'Vertical detail', 'Diagonal detail']
+   # for i, img in enumerate(decomposed):
+   #    LL, LH, HL, HH = img
+   #    fig = plt.figure(figsize=(12, 3))
+   #    for i, a in enumerate([LL, LH, HL, HH]):
+   #       print(i)
+   #       print(a)
+   #       ax = fig.add_subplot(1, 4, i + 1)
+   #       ax.imshow(a, interpolation="nearest", cmap=plt.cm.gray)
+   #       ax.set_title(titles[i], fontsize=10)
+   #       ax.set_xticks([])
+   #       ax.set_yticks([])
+   #    fig.tight_layout()
+   # plt.show()
+## Display for user
+   return decomposed
 
 def process(eyePath):
    IoU = None
@@ -394,10 +424,12 @@ def process(eyePath):
    # cv2.imshow("irisMask", irisMask)
    # cv2.waitKey(300)
 
-
-   IoU = computeIoU(irisMask, irisMaskTrue)
-   IoUList.append(IoU)
-   print('IoU:', IoU)
+## Calculate IoU for evaluation
+   # IoU = computeIoU(irisMask, irisMaskTrue)
+   # IoUList.append(IoU)
+   # print('IoU:', IoU)
+   # return IoU
+##
    # imgMask, imgIris = self.SegIris(imgEye)
    # if pathMask:
    #    imgpathMask = os.path.join(pathMask, os.path.split(subject_paths)[
@@ -409,9 +441,15 @@ def process(eyePath):
    #    cv2.imwrite(imgpathIris, imgIris)
 
    # Mask2Norm(imgEye, irisMask, (32, 256))
-   polar = Normalize(imgEye, pupilCenter, pupilRadius, irisRadius)
-   cv2.imshow("polar", polar)
-   cv2.waitKey(100)
+   polar = Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, (128, 256))
+   # cv2.imshow("polar", polar)
+   # cv2.waitKey(0)
+
+   features = wavelet(polar, 4)
+   # Use LH, HL, HH of the 4th level
+   features = features[3][1:]
+   features = np.array(features).flatten()
+   features = np.where(features > 0, 1, 0)
 
    # imgNorm = self.Mask2Norm(imgIris, imgMask, (32, 256))
    # if pathNorm:
@@ -431,7 +469,7 @@ def process(eyePath):
    # self.MaskImages.append(imgMask)
    # self.NormImages.append(imgNorm)
 
-   return IoU
+   return features
 
 if __name__ == "__main__":
    pathEye = DBEyePath
