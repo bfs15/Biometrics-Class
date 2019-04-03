@@ -15,6 +15,14 @@ import string
 
 # Wavelet
 import pywt
+# LBP
+# import skimage
+from skimage import feature
+
+from sklearn.svm import LinearSVC
+
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 from utils import bilinear_interpolation
 
@@ -22,6 +30,8 @@ DBEyePath = "CASIA-Iris-Lamp-100"
 maskFoldername = "CASIA-IrisV4-Lamp-100-mask"
 
 IoUList = []
+data = []
+labels = []
 # timeout of imageshow when an image is not processed well
 # e.g. low IoU, pupil not detected, wrong detection
 waitKeyTimeoutWrong = 1
@@ -31,9 +41,9 @@ def portrait(img):
    bottom = img.shape[0] - 1
    right = int(img.shape[1] * 0.25)
    top = 0
-
+   # thickness=cv2.FILLED = -1
    cv2.rectangle(img, (left, bottom), (right, top),
-                 color=(255, 255, 255), thickness=cv2.FILLED)
+                 color=(255, 255, 255), thickness=-1)
 
    left = int(img.shape[1] * 0.75)
    bottom = img.shape[0] - 1
@@ -41,7 +51,7 @@ def portrait(img):
    top = 0
 
    cv2.rectangle(img, (left, bottom), (right, top),
-                 color=(255, 255, 255), thickness=cv2.FILLED)
+                 color=(255, 255, 255), thickness=-1)
 
    left = 0
    bottom = int(img.shape[0] * 0.2)
@@ -49,7 +59,7 @@ def portrait(img):
    top = 0
 
    cv2.rectangle(img, (left, bottom), (right, top),
-                 color=(255, 255, 255), thickness=cv2.FILLED)
+                 color=(255, 255, 255), thickness=-1)
 
    left = 0
    bottom = img.shape[0]
@@ -57,7 +67,7 @@ def portrait(img):
    top = int(img.shape[0] * 0.8)
 
    cv2.rectangle(img, (left, bottom), (right, top),
-                 color=(255, 255, 255), thickness=cv2.FILLED)
+                 color=(255, 255, 255), thickness=-1)
 
 def contourCenter(contour):
    m = cv2.moments(contour)
@@ -136,15 +146,15 @@ def pupil(imgEye):
    param2 = 50  # 100 default
    # https://docs.opencv.org/3.1.0/dd/d1a/group__imgproc__feature.html#ga47849c3be0d0406ad3ca45db65a25d2d
    # circles = cv2.HoughCircles(
-   #     edges, cv2.HOUGH_GRADIENT, dp, 20, param1=param1, param2=param2, minRadius=10, maxRadius=70)
-
-   circles = cv2.HoughCircles(edges, cv2.HOUGH_GRADIENT, dp, minDist,
+   #     edges, cv2.cv.CV_HOUGH_GRADIENT, dp, 20, param1=param1, param2=param2, minRadius=10, maxRadius=70)
+   # cv2.cv.CV_HOUGH_GRADIENT (python3) cv2.HOUGH_GRADIENT,
+   circles = cv2.HoughCircles(edges, cv2.cv.CV_HOUGH_GRADIENT, dp, minDist,
                               param1=param1, param2=param2, minRadius=10, maxRadius=100)
    # make more lenient until circles are found or limit is reached
    tt = 0
    while((circles is None or ((len(circles) == 0) and (circles[0][2] == 0)) )and tt < 20):
       edges = cv2.dilate(edges, se5R, iterations=1)
-      circles = cv2.HoughCircles(edges, cv2.HOUGH_GRADIENT, dp, minDist, param1=param1, param2=param2, minRadius=10, maxRadius=100)
+      circles = cv2.HoughCircles(edges, cv2.cv.CV_HOUGH_GRADIENT, dp, minDist, param1=param1, param2=param2, minRadius=10, maxRadius=100)
       param2 -= 2
       tt += 1
 
@@ -367,7 +377,7 @@ def Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, wNorm=(64, 256)):
          # polar[line][col] = imgEye[int(y)][int(x)]
    return polar
 
-def wavelet(image, levels):
+def wavelet(image, levels=4):
    # Wavelet transform of image, and plot approximation and details
    decomposed = []
    for i in range(levels):
@@ -394,80 +404,89 @@ def wavelet(image, levels):
 ## Display for user
    return decomposed
 
+def LBPhistogram(image, numPoints=24, radius=8):
+   # numPoints=10, radius=5
+   # numPoints=24, radius=3
+# compute the Local Binary Pattern representation
+   lbp = feature.local_binary_pattern(image, numPoints,
+      radius, method="uniform")
+   # 'lbp' is of the same shape of the input image, each of the values inside lbp  ranges from [0, numPoints + 2]
+# compute the normalized histogram of patterns
+   (histLBP, _) = np.histogram(lbp.ravel(),
+      bins=np.arange(0, numPoints + 3),
+      range=(0, numPoints + 2), normed=True)
+# display to user
+   x_pos = np.array(range(len(histLBP)))
+   plt.bar(x_pos, histLBP, align='center', alpha=0.5)
+   plt.xticks(x_pos, x_pos)
+   plt.ylabel('percentage of occurence')
+   plt.title('LBP histogram')
+   plt.show()
+   
+   return histLBP
+
 def process(eyePath):
+   print(eyePath)
    IoU = None
+   irisMaskTrue = None
    cv2.destroyAllWindows()
+## Open image
    try:
       maskPath = maskFoldername + os.sep + \
          os.sep.join(eyePath.split(os.sep)[1:])
       irisMaskTrue = Image.open(maskPath)
       irisMaskTrue = np.array(irisMaskTrue, 'uint8')
       # cv2.imshow("irisMaskTrue", irisMaskTrue)
-   except FileNotFoundError as error:
+   except EnvironmentError as error:
       print("couldn't calculate IoU")
       print(error)
-      return None
-
+      # return None
    # Read the image and convert to grayscale
    imgEye = Image.open(eyePath).convert('L')
    # Convert the image format into numpy array
    imgEye = np.array(imgEye, 'uint8')
-   # self.EyeImages.append(imgEye)
-   # self.idEye.append(idEye)
+## Detect pupil
    pupilCenter, pupilRadius = pupil(imgEye)
    if(pupilCenter is None):
       print("Failed to detect pupil")
       cv2.waitKey(waitKeyTimeoutWrong)
       return None
-
+## Detect iris
    irisMask, irisRadius = irisDetect(imgEye, pupilCenter, pupilRadius)
    # cv2.imshow("irisMask", irisMask)
    # cv2.waitKey(300)
-
-## Calculate IoU for evaluation
-   # IoU = computeIoU(irisMask, irisMaskTrue)
-   # IoUList.append(IoU)
-   # print('IoU:', IoU)
-   # return IoU
-##
-   # imgMask, imgIris = self.SegIris(imgEye)
+## Iris mask IoU evaluation
+   # if irisMaskTrue:
+   #    IoU = computeIoU(irisMask, irisMaskTrue)
+   #    IoUList.append(IoU)
+   #    print('IoU:', IoU)
+## Save irisMask and irisImg
    # if pathMask:
    #    imgpathMask = os.path.join(pathMask, os.path.split(subject_paths)[
    #                               1], os.path.split(side_path)[1], os.path.split(eyePath)[1])
-   #    cv2.imwrite(imgpathMask, imgMask)
+   #    cv2.imwrite(imgpathMask, irisMask)
    # if pathIris:
    #    imgpathIris = os.path.join(pathIris, os.path.split(subject_paths)[
    #                               1], os.path.split(side_path)[1], os.path.split(eyePath)[1])
    #    cv2.imwrite(imgpathIris, imgIris)
-
-   # Mask2Norm(imgEye, irisMask, (32, 256))
+## Normalize image
    polar = Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, (128, 256))
    # cv2.imshow("polar", polar)
    # cv2.waitKey(0)
-
+##
+   # imgNorm = self.Mask2Norm(imgIris, irisMask, (32, 256))
+   # if pathNorm:
+   #    imgpathNorm = os.path.join(pathNorm, os.path.split(subject_paths)[
+   #                               1], os.path.split(side_path)[1], os.path.split(eyePath)[1])
+   #    cv2.imwrite(imgpathNorm, imgNorm)
+## Wavelet
    features = wavelet(polar, 4)
    # Use LH, HL, HH of the 4th level
    features = features[3][1:]
    features = np.array(features).flatten()
    features = np.where(features > 0, 1, 0)
-
-   # imgNorm = self.Mask2Norm(imgIris, imgMask, (32, 256))
-   # if pathNorm:
-   #    imgpathNorm = os.path.join(pathNorm, os.path.split(subject_paths)[
-   #                               1], os.path.split(side_path)[1], os.path.split(eyePath)[1])
-   #    cv2.imwrite(imgpathNorm, imgNorm)
-
-#					fig, aplt = plt.subplots(2,2)
-#					aplt[0,0].imshow(imgEye,cmap='Greys_r')
-#					aplt[0,1].imshow(imgMask,cmap='Greys_r')
-#					aplt[1,0].imshow(imgIris,cmap='Greys_r')
-#					aplt[1,1].imshow(imgNorm,cmap='Greys_r')
-#					plt.pause(_waitingtime)
-#					plt.close()
-
-   # self.IrisImages.append(imgIris)
-   # self.MaskImages.append(imgMask)
-   # self.NormImages.append(imgNorm)
+## LBP
+   # features = LBPhistogram(polar)
 
    return features
 
@@ -479,14 +498,14 @@ if __name__ == "__main__":
    for s, subject_paths in enumerate(subjects_paths, start=1):
       # Get the label of the subject
       nsb = int(os.path.split(subject_paths)[1])
-
+## Directory handling
       # if pathMask and not os.path.exists(os.path.join(pathMask, os.path.split(subject_paths)[1])):
       #    os.makedirs(os.path.join(pathMask, os.path.split(subject_paths)[1]))
       # if pathIris and not os.path.exists(os.path.join(pathIris, os.path.split(subject_paths)[1])):
       #    os.makedirs(os.path.join(pathIris, os.path.split(subject_paths)[1]))
       # if pathNorm and not os.path.exists(os.path.join(pathNorm, os.path.split(subject_paths)[1])):
       #    os.makedirs(os.path.join(pathNorm, os.path.split(subject_paths)[1]))
-
+##
       side_paths = [os.path.join(subject_paths, d) for d in os.listdir(
                            subject_paths) if os.path.isdir(os.path.join(subject_paths, d))]
       for e, side_path in enumerate(side_paths, start=1):
@@ -497,25 +516,79 @@ if __name__ == "__main__":
          # Print current subject and folder
          print('\t\t>{0}/{1}:{2}'.format(nsb, idEye, sideLetter))
          sys.stdout.flush()
-
-#          if pathMask and not os.path.exists(os.path.join(pathMask, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
-#             os.makedirs(os.path.join(pathMask, os.path.split(
-#                                           subject_paths)[1], os.path.split(side_path)[1]))
-#          if pathIris and not os.path.exists(os.path.join(pathIris, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
-#             os.makedirs(os.path.join(pathIris, os.path.split(
-#                                           subject_paths)[1], os.path.split(side_path)[1]))
-#          if pathNorm and not os.path.exists(os.path.join(pathNorm, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
-#             os.makedirs(os.path.join(pathNorm, os.path.split(
-#                                           subject_paths)[1], os.path.split(side_path)[1]))
-
+## Directory handling
+         # if pathMask and not os.path.exists(os.path.join(pathMask, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
+         #    os.makedirs(os.path.join(pathMask, os.path.split(
+         #                                  subject_paths)[1], os.path.split(side_path)[1]))
+         # if pathIris and not os.path.exists(os.path.join(pathIris, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
+         #    os.makedirs(os.path.join(pathIris, os.path.split(
+         #                                  subject_paths)[1], os.path.split(side_path)[1]))
+         # if pathNorm and not os.path.exists(os.path.join(pathNorm, os.path.split(subject_paths)[1], os.path.split(side_path)[1])):
+         #    os.makedirs(os.path.join(pathNorm, os.path.split(
+         #                                  subject_paths)[1], os.path.split(side_path)[1]))
+##
          eyePaths = [os.path.join(side_path, f) for f in os.listdir(
                                  side_path) if f.endswith('.jpg') and os.path.isfile(os.path.join(side_path, f))]
          for y, eyePath in enumerate(eyePaths, start=1):
             # Print current filename
             print('\t-{0}:{1}'.format(y, eyePath))
             sys.stdout.flush()
-            process(eyePath)
-   print(IoUList)
+            # extract features
+            features = process(eyePath)
+            if features is None:
+               continue
+            # add to database
+            data.append(features)
+            labels.append(s)
 
-   print('mean:', np.mean(np.array(IoUList)))
-   print('var:', np.var(np.array(IoUList)))
+## test data with SVM
+   # model = LinearSVC(C=100.0, random_state=42)
+   # k_fold = StratifiedKFold(n_splits=10)
+   # print(cross_val_score(model, data, labels, cv=k_fold, n_jobs=-1))
+## train_test_split
+   X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
+   def test(X_train, X_test, y_train, y_test):
+      correct_num = 0
+      for x, y in zip(X_test, y_test):
+         minDist = sys.maxint
+         guess = None
+
+         for feat, label in zip(X_train, y_train):
+            # hammingDist = np.bitwise_xor(x, feat).sum()
+            hammingDist = (x != feat).sum()
+            if hammingDist < minDist:
+               minDist = hammingDist
+               guess = label
+         
+         if guess == y:
+            correct_num += 1
+            print('+correct')
+         else:
+            print('-incorrect')
+         
+         print('minDist', minDist)
+
+      accuracy = correct_num/ len(X_test)
+      print('accuracy: ', accuracy)
+      return accuracy
+   accuracy = test(X_train, X_test, y_train, y_test)
+## KFold
+   accuracyList = []
+   k_fold = StratifiedKFold(n_splits=4)
+   X = np.array(data)
+   y = np.array(labels)
+   k_fold.get_n_splits(X)
+   for train_index, test_index in k_fold.split(X,labels):
+      # print("TRAIN:", train_index, "TEST:", test_index)
+      X_train, X_test = X[train_index], X[test_index]
+      y_train, y_test = y[train_index], y[test_index]
+      # accuracy = test(X_train, X_test, y_train, y_test)
+      # accuracyList.append(accuracy)
+   # accuracyList = np.array(accuracyList)
+   # print('mean:', np.mean(accuracyList))
+   # print('var:', np.var(accuracyList))
+## Iris mask IoU evaluation
+   # IoUList = np.array(IoUList)
+   # print(IoUList)
+   # print('mean:', np.mean(IoUList))
+   # print('var:', np.var(IoUList))
