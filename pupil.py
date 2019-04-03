@@ -546,6 +546,9 @@ if __name__ == "__main__":
    # k_fold = StratifiedKFold(n_splits=10)
    # print(cross_val_score(model, data, labels, cv=k_fold, n_jobs=-1))
 ## train_test_split
+   def distanceCalc(x,y):
+      # return (np.bitwise_xor(x, y).sum()) / len(y)
+      return ((x != y).sum()) / len(y)
    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
    def test(X_train, X_test, y_train, y_test):
       correct_num = 0
@@ -554,8 +557,7 @@ if __name__ == "__main__":
          guess = None
 
          for feat, label in zip(X_train, y_train):
-            # hammingDist = np.bitwise_xor(x, feat).sum()
-            hammingDist = (x != feat).sum()
+            hammingDist = distanceCalc(x, feat)
             if hammingDist < minDist:
                minDist = hammingDist
                guess = label
@@ -572,7 +574,74 @@ if __name__ == "__main__":
       print('accuracy: ', accuracy)
       return accuracy
    accuracy = test(X_train, X_test, y_train, y_test)
-## KFold
+## Verification
+   def DETCurve(fps,fns):
+		"""
+		Given false positive and false negative rates, produce a DET Curve.
+		The false positive rate is assumed to be increasing while the false
+		negative rate is assumed to be decreasing.
+		"""
+		axis_min = min(fps[0],fns[-1])
+		fig,ax = plt.subplots()
+		plot(fps,fns)
+		yscale('log')
+		xscale('log')
+		ticks_to_use = [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50]
+		ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+		ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+		ax.set_xticks(ticks_to_use)
+		ax.set_yticks(ticks_to_use)
+		axis([0.001,50,0.001,50])
+		
+   def verificationTest(distances, labels, threshold):
+      eer = 0
+      positiveTestsNo = 0
+      FAR = 0
+      FRR = 0
+      for i in range(len(labels)):
+         for j in range(len(labels)):
+            if labels[i] != labels[j]:
+               falseTests += 1
+               if distances[i][j] > threshold:
+                  truePositivesNo += 1
+               else:
+                  FAR += 1
+            else:
+               positiveTestsNo += 1
+               if distances[i][j] < threshold:
+                  truePositivesNo += 1
+               else:
+                  FRR += 1
+      return FAR, FRR
+
+   # initialize list
+   distances = [None]*len(data)
+   for i in range(len(data)):
+      # initialize list
+      distances[i] = [None]*len(data)
+      for j in range(i, len(data)):
+         distances[i][j] = distanceCalc(data[i], data[j])
+         distances[j][i] = distances[i][j]
+         
+   fpsList = []
+   fnsList = []
+   for threshold in np.linspace(0.05, 0.95, num=int(0.9/0.05)):
+      FAR, FRR = verificationTest(distances, labels, threshold)
+      fpsList.append(FAR)
+      fnsList.append(FRR)
+    
+   DETCurve(fpsList, fnsList)
+   
+## Identification
+   def testIdentification(X_train, X_test, y_train, y_test):
+      model.fit(X_train, y_train)
+      correct = 0
+      for i, data in enumerate(X_test):
+          prediction = model.predict(data)
+          if y_test[i] == prediction:
+              correct += 1
+      accuracy = correct / float(len(X_test))
+      return accuracy
    accuracyList = []
    k_fold = StratifiedKFold(n_splits=4)
    X = np.array(data)
@@ -582,11 +651,27 @@ if __name__ == "__main__":
       # print("TRAIN:", train_index, "TEST:", test_index)
       X_train, X_test = X[train_index], X[test_index]
       y_train, y_test = y[train_index], y[test_index]
-      # accuracy = test(X_train, X_test, y_train, y_test)
+      # accuracy = testIdentification(X_train, X_test, y_train, y_test)
       # accuracyList.append(accuracy)
    # accuracyList = np.array(accuracyList)
    # print('mean:', np.mean(accuracyList))
    # print('var:', np.var(accuracyList))
+   
+   
+ for i in range(len(labels)):
+    if labels[i] != labels[j]:
+       falseTests += 1
+       if distances[i][j] > threshold:
+          truePositivesNo += 1
+       else:
+          FAR += 1
+    else:
+       positiveTestsNo += 1
+       if distances[i][j] < threshold:
+          truePositivesNo += 1
+       else:
+          FRR += 1
+   
 ## Iris mask IoU evaluation
    # IoUList = np.array(IoUList)
    # print(IoUList)
