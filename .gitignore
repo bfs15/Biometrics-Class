@@ -3,6 +3,7 @@ orl_faces/
 
 *.tar.gz
 CASIA-Iris-Lamp-100
+CASIA-IrisV4-Lamp-100*
 CASIA-IrisV4-Interval
 .vscode
 
