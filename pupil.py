@@ -31,37 +31,34 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 from utils import bilinear_interpolation
 
-DBEyePath = "CASIA-Iris-Lamp-100"
-maskFoldername = "CASIA-IrisV4-Lamp-100-mask"
+# DBEyePath = "CASIA-Iris-Lamp-100"
+# maskFoldername = "CASIA-IrisV4-Lamp-100-mask"
+DBEyePath = "CASIA-IrisV4-Interval"
+maskFoldername = "CASIA-IrisV4-Interval-mask"
 
 IoUList = []
 data = []
 labels = []
+dataLBP = []
+labelsLBP = []
 # timeout of imageshow when an image is not processed well
 # e.g. low IoU, pupil not detected, wrong detection
 waitKeyTimeoutWrong = 1
 # variable purely for user display
 currentEyePath = ""
 
-def portrait(img):
+
+def portrait(img, portraitShape=[0.2, 0.8,  0.8, 0.2]):
    left = 0
    bottom = img.shape[0] - 1
-   right = int(img.shape[1] * 0.25)
+   right = int(img.shape[1] * portraitShape[0])
    top = 0
    # thickness=cv2.FILLED = -1
    cv2.rectangle(img, (left, bottom), (right, top),
                  color=(255, 255, 255), thickness=-1)
 
-   left = int(img.shape[1] * 0.75)
+   left = int(img.shape[1] * portraitShape[1])
    bottom = img.shape[0] - 1
-   right = int(img.shape[1])
-   top = 0
-
-   cv2.rectangle(img, (left, bottom), (right, top),
-                 color=(255, 255, 255), thickness=-1)
-
-   left = 0
-   bottom = int(img.shape[0] * 0.2)
    right = int(img.shape[1])
    top = 0
 
@@ -71,10 +68,19 @@ def portrait(img):
    left = 0
    bottom = img.shape[0]
    right = int(img.shape[1])
-   top = int(img.shape[0] * 0.8)
+   top = int(img.shape[0] * portraitShape[2])
 
    cv2.rectangle(img, (left, bottom), (right, top),
                  color=(255, 255, 255), thickness=-1)
+
+   left = 0
+   bottom = int(img.shape[0] * portraitShape[3])
+   right = int(img.shape[1])
+   top = 0
+
+   cv2.rectangle(img, (left, bottom), (right, top),
+                 color=(255, 255, 255), thickness=-1)
+
 
 def contourCenter(contour):
    m = cv2.moments(contour)
@@ -104,10 +110,10 @@ def findContoursPupil(binaryEye, overlayImg):
       # check if square enough or too wide/tall to be pupil
       if not (br[2]*1.50 > br[3] and br[3]*1.50 > br[2]):
 ## display image for user
-         # print('not circle enough\n')
-         # sys.stdout.flush()
+         print('not circle enough\n')
+         sys.stdout.flush()
          # cv2.circle(binaryEye, contourCenter(contour), 5, (200, 200, 200), -1)
-         # cv2.imshow("Binary", binaryEye)
+         # cv2.imshow(currentEyePath + " Contour", binaryEye)
          # cv2.waitKey(waitKeyTimeoutWrong)
 ##
          continue
@@ -134,11 +140,13 @@ def Canny(binaryEye, overlayImg):
    # https://docs.opencv.org/3.1.0/dd/d1a/group__imgproc__feature.html#ga47849c3be0d0406ad3ca45db65a25d2d
    # circles = cv2.HoughCircles(
    #     edges, cv2.HOUGH_GRADIENT, dp, 20, param1=param1, param2=param2, minRadius=10, maxRadius=70)
-   # cv2.cv.CV_HOUGH_GRADIENT (python3) cv2.HOUGH_GRADIENT,
+   # cv2.cv.CV_HOUGH_GRADIENT (python3) cv2.HOUGH_GRADIENT
    circles = cv2.HoughCircles(edges, cv2.HOUGH_GRADIENT, dp, minDist,
                               param1=param1, param2=param2, minRadius=10, maxRadius=100)
    # make more lenient until circles are found or limit is reached
    tt = 0
+   se5R = cv2.getStructuringElement(
+       cv2.MORPH_ELLIPSE, (5, 5))  # se 5x5 - Rhombus-shaped
    while((circles is None or ((len(circles) == 0) and (circles[0][2] == 0)))and tt < 20):
       edges = cv2.dilate(edges, se5R, iterations=1)
       circles = cv2.HoughCircles(edges, cv2.HOUGH_GRADIENT, dp, minDist,
@@ -146,8 +154,8 @@ def Canny(binaryEye, overlayImg):
       param2 -= 2
       tt += 1
 ## display image for user
-   overlayImg[np.where(edges > 200)] = 255
-   # cv2.imshow(currentEyePath + "overlayImg", overlayImg)
+   # overlayImg[np.where(edges > 200)] = 255
+   # cv2.imshow(currentEyePath + " overlayImg Canny", overlayImg)
 ##
    if circles is not None:
       circles = circles[0]
@@ -194,23 +202,23 @@ def chooseCircle(circles, overlayImg):
    cx, cy, pupilRadius = circles[np.argmin(distances), :]
 
 # display image for user
-   rSize = 3
-   ry = int(imgCenter[0])
-   rx = int(imgCenter[1])
-   cv2.rectangle(overlayImg, (rx - rSize, ry - rSize),
-                 (rx + rSize, ry + rSize), 150, -1)
-   for circle in circles:
-      rx = circle[0]
-      ry = circle[1]
-      cv2.rectangle(overlayImg, (rx - rSize, ry - rSize),
-                    (rx + rSize, ry + rSize), 200, -1)
+   # rSize = 3
+   # ry = int(imgCenter[0])
+   # rx = int(imgCenter[1])
+   # cv2.rectangle(overlayImg, (rx - rSize, ry - rSize),
+   #               (rx + rSize, ry + rSize), 150, -1)
+   # for circle in circles:
+   #    rx = circle[0]
+   #    ry = circle[1]
+   #    cv2.rectangle(overlayImg, (rx - rSize, ry - rSize),
+   #                  (rx + rSize, ry + rSize), 200, -1)
 
-   cv2.circle(overlayImg, (cx, cy), pupilRadius, 255, 1)
-   # circle center
-   rSize = 4
-   cv2.rectangle(overlayImg, (cx - rSize, cy - rSize),
-                 (cx + rSize, cy + rSize), 255, -1)
-   # cv2.imshow(currentEyePath + "overlayImg", overlayImg)
+   # cv2.circle(overlayImg, (cx, cy), pupilRadius, 255, 1)
+   # # circle center
+   # rSize = 4
+   # cv2.rectangle(overlayImg, (cx - rSize, cy - rSize),
+   #               (cx + rSize, cy + rSize), 255, -1)
+   # cv2.imshow(currentEyePath + " overlayImg Circles", overlayImg)
 #
    return (cx, cy), pupilRadius
 
@@ -218,7 +226,10 @@ def chooseCircle(circles, overlayImg):
 def pupil(imgEye):
    waitKeyTime = 150
    se5R = cv2.getStructuringElement(
-                  cv2.MORPH_ELLIPSE, (5, 5))  # se 5x5 - Rhombus-shaped
+       cv2.MORPH_ELLIPSE, (5, 5))  # se 5x5 - Rhombus-shaped
+
+   imgEye = cv2.equalizeHist(imgEye)
+   # cv2.imshow(currentEyePath + " imgEye", imgEye)
 
    # opening - darkening
    ref = cv2.morphologyEx(imgEye, cv2.MORPH_OPEN, se5R, iterations=6)
@@ -227,21 +238,23 @@ def pupil(imgEye):
                     'uint8')  # a half of otsu value
   
    portrait(binaryEye)
+   # cv2.imshow(currentEyePath + " 0binaryEye", binaryEye)
 
    # closing
    binaryEye = cv2.morphologyEx(binaryEye, cv2.MORPH_CLOSE, se5R, iterations=7)
+   # cv2.imshow(currentEyePath + " 1binaryEye", binaryEye)
 
    # Copy to overlay edges and circles for  user visualization
    overlayImg = imgEye.copy()
 
    pupilRadius = None
-### Contours
-   if pupilRadius is None:
-      circles = findContoursPupil(binaryEye, overlayImg)
-      (cx, cy), pupilRadius = chooseCircle(circles, overlayImg)
 ### Canny
    if pupilRadius is None:
       circles = Canny(binaryEye, overlayImg)
+      (cx, cy), pupilRadius = chooseCircle(circles, overlayImg)
+### Contours
+   if pupilRadius is None:
+      circles = findContoursPupil(binaryEye, overlayImg)
       (cx, cy), pupilRadius = chooseCircle(circles, overlayImg)
 
    return (cx, cy), pupilRadius
@@ -297,7 +310,7 @@ def irisDetect(imgEye, pupilCenter, pupilRadius):
 ## display image for user
    # overlayImg = imgEye.copy()
    # cv2.circle(overlayImg, (cx, cy), pupilRadius, 255, 1)
-   # cv2.imshow(currentEyePath + "overlayImg", overlayImg)
+   # cv2.imshow(currentEyePath + " overlayImg", overlayImg)
 ##
    # Matrix with the cosine and sines of increasing angles
    # Transpose so first dimension is [cosines,sines], and second has increasing angles
@@ -337,7 +350,7 @@ def irisDetect(imgEye, pupilCenter, pupilRadius):
 
 ## display overlay for user
    # cv2.circle(overlayImg, (cx, cy), irisRadius, 255, 1)
-   # cv2.imshow(currentEyePath + "overlayImg", overlayImg)
+   # cv2.imshow(currentEyePath + " overlayImg", overlayImg)
 ##
    return irisMask, irisRadius
 
@@ -355,10 +368,10 @@ def computeIoU(irisMask, irisMaskTrue):
    if(IoU < 0.6):
       print('---Bad result---')
       sys.stdout.flush()
-      cv2.imshow(currentEyePath + "irisMask", irisMask)
-      cv2.imshow(currentEyePath + "irisMaskTrue", irisMaskTrue)
-      cv2.imshow(currentEyePath + "intersectionImg", intersectionImg)
-      cv2.imshow(currentEyePath + "unionImg", unionImg)
+      # cv2.imshow(currentEyePath + " irisMask", irisMask)
+      # cv2.imshow(currentEyePath + " irisMaskTrue", irisMaskTrue)
+      # cv2.imshow(currentEyePath + " intersectionImg", intersectionImg)
+      # cv2.imshow(currentEyePath + " unionImg", unionImg)
       # cv2.waitKey(waitKeyTimeoutWrong)
    return IoU
 
@@ -426,7 +439,7 @@ def Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, wNorm=(64, 256)):
                pupilCenter[1] + radius + pupilRadius)
 
          sys.stdout.flush()
-         cv2.waitKey(0)
+         # cv2.waitKey(0)
 
       ## interpolation
       # for col, angle in enumerate(angles):
@@ -499,11 +512,16 @@ def process(eyePath):
    cv2.destroyAllWindows()
 ## Open image
    try:
-      maskPath = maskFoldername + os.sep + \
-         os.sep.join(eyePath.split(os.sep)[1:])
+      maskPath = ""
+      if DBEyePath == "CASIA-IrisV4-Interval":
+         maskPath = maskFoldername + os.sep + eyePath.split(os.sep)[-1].split('.')[0] + ".tiff"
+      else:
+         maskPath = maskFoldername + os.sep + \
+            os.sep.join(eyePath.split(os.sep)[1:])
       irisMaskTrue = Image.open(maskPath)
       irisMaskTrue = np.array(irisMaskTrue, 'uint8')
-      # cv2.imshow(currentEyePath + "irisMaskTrue", irisMaskTrue)
+      # cv2.imshow(currentEyePath + " irisMaskTrue", irisMaskTrue)
+      # cv2.waitKey(0)
    except EnvironmentError as error:
       print("Can't calculate IoU")
       print(error)
@@ -514,20 +532,20 @@ def process(eyePath):
    imgEye = np.array(imgEye, 'uint8')
 ## Detect pupil
    pupilCenter, pupilRadius = pupil(imgEye)
-   if(pupilCenter is None):
+   if(pupilRadius is None):
       print("Failed to detect pupil")
-      # cv2.waitKey(waitKeyTimeoutWrong)
+      cv2.waitKey(waitKeyTimeoutWrong)
       return None
 ## Detect iris
    irisMask, irisRadius = irisDetect(imgEye, pupilCenter, pupilRadius)
-   if(irisMask is None):
+   if(irisRadius is None):
       print("Failed extract irisRadius")
       # cv2.waitKey(waitKeyTimeoutWrong)
       return None
-   cv2.imshow("irisMask", irisMask)
+   # cv2.imshow("irisMask", irisMask)
    # cv2.waitKey(300)
 ## Iris mask IoU evaluation
-   if irisMaskTrue:
+   if irisMaskTrue is not None:
       IoU = computeIoU(irisMask, irisMaskTrue)
       IoUList.append(IoU)
       print('IoU:', IoU)
@@ -544,22 +562,22 @@ def process(eyePath):
    polar = Normalize(imgEye, pupilCenter, pupilRadius, irisRadius, (128, 256))
    # cv2.imshow("polar", polar)
    # cv2.waitKey(0)
-##
+## Save Normalization
    # imgNorm = self.Mask2Norm(imgIris, irisMask, (32, 256))
    # if pathNorm:
    #    imgpathNorm = os.path.join(pathNorm, os.path.split(subject_paths)[
    #                               1], os.path.split(side_path)[1], os.path.split(eyePath)[1])
    #    cv2.imwrite(imgpathNorm, imgNorm)
 ## Wavelet
-   features = wavelet(polar, 4)
+   featuresWavelet = wavelet(polar, 4)
    # Use LH, HL, HH of the 4th level
-   features = features[3][1:]
-   features = np.array(features).flatten()
-   features = np.where(features > 0, 1, 0)
+   featuresWavelet = featuresWavelet[3][1:]
+   featuresWavelet = np.array(featuresWavelet).flatten()
+   featuresWavelet = np.where(featuresWavelet > 0, 1, 0)
 ## LBP
-   # features = LBPhistogram(polar)
+   featuresLBP = LBPhistogram(polar)
 
-   return features
+   return featuresWavelet, featuresLBP
 
 
 if __name__ == "__main__":
@@ -612,54 +630,31 @@ if __name__ == "__main__":
             sys.stdout.flush()
             # extract features
             # variable purely for user display
-            currentEyePath = eyePath
+            currentEyePath = os.sep.join(eyePath.split(os.sep)[1:])
             features = process(eyePath)
-            if features is None:
-               # print("No features")
-               # print('\t-{0}:{1}'.format(y, eyePath))
-               continue
-            # add to database
-            data.append(features)
-            labels.append(subjectNo)
+            featuresWavelet, featuresLBP = None, None
+            if features is not None:
+               featuresWavelet, featuresLBP = features
 
+            if featuresWavelet is not None:
+               # add to database
+               data.append(featuresWavelet)
+               labels.append(subjectNo)
+            if featuresLBP is not None:
+               # add to database
+               dataLBP.append(featuresLBP)
+               labelsLBP.append(subjectNo)
+
+   end = time.time()
+   print("{0:.2f}".format(round(end - start, 2)), " seconds elapsed")
 ## Tests
    def distanceCalc(x, y):
       # return (np.bitwise_xor(x, y).sum()) / len(y)
       return ((x != y).sum()) / len(y)
 ## Iris mask IoU evaluation
    IoUList = np.array(IoUList)
-   print('mean:', np.mean(IoUList))
-   print('var:', np.var(IoUList))
-## test data with SVM
-   # model = LinearSVC(C=100.0, random_state=42)
-   # k_fold = StratifiedKFold(n_splits=10)
-   # print(cross_val_score(model, data, labels, cv=k_fold, n_jobs=-1))
-## train_test_split
-   # X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
-   # def test(X_train, X_test, y_train, y_test):
-   #    correct_num = 0
-   #    for x, y in zip(X_test, y_test):
-   #       minDist = sys.maxint
-   #       guess = None
-
-   #       for feat, label in zip(X_train, y_train):
-   #          hammingDist = distanceCalc(x, feat)
-   #          if hammingDist < minDist:
-   #             minDist = hammingDist
-   #             guess = label
-         
-   #       if guess == y:
-   #          correct_num += 1
-   #          print('+correct')
-   #       else:
-   #          print('-incorrect')
-         
-   #       print('minDist', minDist)
-
-   #    accuracy = correct_num/ len(X_test)
-   #    print('accuracy: ', accuracy)
-   #    return accuracy
-   # accuracy = test(X_train, X_test, y_train, y_test)
+   print('IoU mean:', np.mean(IoUList))
+   print('IoU var:', np.var(IoUList))
 ## Verification
    def DETCurve(fps, fns):
       """
@@ -693,26 +688,51 @@ if __name__ == "__main__":
       FRR = 0
       for i in range(len(labels)):
          for j in range(len(labels)):
+            if i == j:
+               continue
             if labels[i] != labels[j]:
                falseTestsNo += 1
-               if(j < i):
-                  i, j = j, i
                if distances[i][j] > threshold:
                   trueRejectionNo += 1
                else:
                   FAR += 1
             else:
                positiveTestsNo += 1
-               if(j < i):
-                  i, j = j, i
                if distances[i][j] <= threshold:
                   truePositivesNo += 1
                else:
                   FRR += 1
+
       return FAR/float(falseTestsNo), FRR/float(positiveTestsNo)
 
-   end = time.time()
-   print("{0:.2f}".format(round(end - start, 2)), " seconds elapsed")
+   def verificationTestNP(distances, labels, threshold):
+      falseTestsNo = 0
+      positiveTestsNo = 0
+      FAR = 0
+      FRR = 0
+      labels = np.array(labels)
+
+      for i in range(len(labels)):
+         # extract distances between different subjects
+         indexes = np.where(labels != labels[i])
+         falseTests = distances[i][indexes]
+         # calculate how many are accepted when they should have been rejected
+         FAR += (falseTests <= threshold).sum()
+         # update total number of tests
+         falseTestsNo += len(falseTests)
+
+         # extract distances between same subject
+         indexes = np.where(labels == labels[i])[0]
+         # remove distance between same sample
+         index = np.argwhere(indexes == i)
+         indexes = np.delete(indexes, index)
+         # extract distances between different subjects
+         positiveTests = distances[i][indexes]
+         # calculate how many are accepted when they should have been rejected
+         FRR += (positiveTests > threshold).sum()
+         positiveTestsNo += len(positiveTests)
+         # print("indexes", indexes)
+      return FAR/float(falseTestsNo), FRR/float(positiveTestsNo)
 ## Computing distance array
    # start timer
    start = time.time()
@@ -724,8 +744,9 @@ if __name__ == "__main__":
    for i in range(len(data)):
       # initialize list
       distances[i] = [None]*len(data)
-      for j in range(i, len(data)):
+      for j in range(len(data)):
          distances[i][j] = distanceCalc(data[i], data[j])
+
 
    end = time.time()
    print("{0:.2f}".format(round(end - start, 2)), " seconds elapsed")
@@ -738,19 +759,25 @@ if __name__ == "__main__":
 
    fpsList = []
    fnsList = []
+   distances = np.array(distances)
    for threshold in np.linspace(0.1, 0.9, num=int(0.9/0.001)):
-      FAR, FRR = verificationTest(distances, labels, threshold)
+      # FAR, FRR = verificationTest(distances, labels, threshold)
+      # fpsList.append(FAR)
+      # fnsList.append(FRR)
+      FAR, FRR = verificationTestNP(distances, labels, threshold)
       fpsList.append(FAR)
       fnsList.append(FRR)
-    
+   
    DETCurve(fpsList, fnsList)
    plt.savefig('DETCurve.png')
 
-   print("fpsList", fpsList)
-   print("fnsList", fnsList)
-   diff = np.array(fpsList) - np.array(fnsList)
+   diff = np.abs(np.array(fpsList) - np.array(fnsList))
 
    argEER = np.argmin(diff)
+   EER = np.min(diff)
+
+   print("argEER", argEER)
+   print("EER", EER)
    
    print("fps", fpsList[argEER])
    print("fns", fnsList[argEER])
@@ -758,29 +785,77 @@ if __name__ == "__main__":
    end = time.time()
    print("{0:.2f}".format(round(end - start, 2)), " seconds elapsed")
 
-   
 ## Identification
-   # def testIdentification(X_train, X_test, y_train, y_test):
-   #    model.fit(X_train, y_train)
-   #    correct = 0
-   #    for i, data in enumerate(X_test):
-   #       prediction = model.predict(data)
-   #       if y_test[i] == prediction:
-   #          correct += 1
-   #    accuracy = correct / float(len(X_test))
-   #    return accuracy
-   # accuracyList = []
-   # k_fold = StratifiedKFold(n_splits=4)
-   # X = np.array(data)
-   # y = np.array(labels)
-   # k_fold.get_n_splits(X)
-   # for train_index, test_index in k_fold.split(X,labels):
-   #    # print("TRAIN:", train_index, "TEST:", test_index)
-   #    X_train, X_test = X[train_index], X[test_index]
-   #    y_train, y_test = y[train_index], y[test_index]
-   #    # accuracy = testIdentification(X_train, X_test, y_train, y_test)
-   #    # accuracyList.append(accuracy)
-   # # accuracyList = np.array(accuracyList)
-   # # print('mean:', np.mean(accuracyList))
-   # # print('var:', np.var(accuracyList))
+   # # start timer
+   # start = time.time()
+
+   # # test data with SVM
+   # model = LinearSVC(C=100.0, random_state=42)
+   # k_fold = None
+   # max_fold = 40
+   # n_splits = 40
+   # for i in range(max_fold):
+   #    try:
+   #       n_splits = max_fold-i
+   #       k_fold = StratifiedKFold(n_splits=n_splits)
+   #       print("n_splits: \t", n_splits)
+   #       print(cross_val_score(model, dataLBP, labels, cv=k_fold, n_jobs=-1))
+   #       print(cross_val_score(model, data, labels, cv=k_fold, n_jobs=-1))
+   #       break
+   #    except ValueError as error:
+   #       pass
+
    
+   # # def testIdentification(X_train, X_test, y_train, y_test):
+   # #    model.fit(X_train, y_train)
+   # #    correct = 0
+   # #    for i, data in enumerate(X_test):
+   # #       prediction = model.predict(data)
+   # #       if y_test[i] == prediction:
+   # #          correct += 1
+   # #    accuracy = correct / float(len(X_test))
+   # #    return accuracy
+   # # accuracyList = []
+   # # k_fold = StratifiedKFold(n_splits=4)
+   # # X = np.array(data)
+   # # y = np.array(labels)
+   # # k_fold.get_n_splits(X)
+   # # for train_index, test_index in k_fold.split(X,labels):
+   # #    # print("TRAIN:", train_index, "TEST:", test_index)
+   # #    X_train, X_test = X[train_index], X[test_index]
+   # #    y_train, y_test = y[train_index], y[test_index]
+   # #    accuracy = testIdentification(X_train, X_test, y_train, y_test)
+   # #    accuracyList.append(accuracy)
+   # # accuracyList = np.array(accuracyList)
+   # # print('Identification mean:', np.mean(accuracyList))
+   # # print('Identification var:', np.var(accuracyList))
+
+   # end = time.time()
+   # print("{0:.2f}".format(round(end - start, 2)), " seconds elapsed")
+   
+## train_test_split
+   # X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
+   # def test(X_train, X_test, y_train, y_test):
+   #    correct_num = 0
+   #    for x, y in zip(X_test, y_test):
+   #       minDist = sys.maxint
+   #       guess = None
+
+   #       for feat, label in zip(X_train, y_train):
+   #          hammingDist = distanceCalc(x, feat)
+   #          if hammingDist < minDist:
+   #             minDist = hammingDist
+   #             guess = label
+         
+   #       if guess == y:
+   #          correct_num += 1
+   #          print('+correct')
+   #       else:
+   #          print('-incorrect')
+         
+   #       print('minDist', minDist)
+
+   #    accuracy = correct_num/ len(X_test)
+   #    print('accuracy: ', accuracy)
+   #    return accuracy
+   # accuracy = test(X_train, X_test, y_train, y_test)
