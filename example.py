@@ -20,10 +20,10 @@ if __name__ == "__main__":
 
     images_enhanced = []
 
-    for image in images:
+    for image in images[0:1]:
         image = enhance.contrast(image)
         image = enhance.median_filter(image, 5)
-        image = enhance.gradient(image)
+        image = enhance.gradient(image, 5)
 
         images_enhanced.append(image)
 
@@ -32,5 +32,6 @@ if __name__ == "__main__":
     if (verbose):
         print("max", image.max())
         print("min", image.min())
-        plt.imshow(Image.fromarray(image), cmap='gray')
-        plt.show()
+        print(image)
+        # plt.imshow(Image.fromarray(image), cmap='gray')
+        # plt.show()
