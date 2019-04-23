@@ -5,6 +5,7 @@ import enhance
 from PIL import Image
 import numpy as np
 from matplotlib import pylab as plt
+import scipy
 
 verbose = True
 
@@ -19,9 +20,11 @@ if __name__ == "__main__":
 
     images_enhanced = []
 
-    for image in images[:1]:
+    for image in images:
         image = enhance.contrast(image)
         image = enhance.median_filter(image, 5)
+        image = enhance.gradient(image)
+
         images_enhanced.append(image)
 
     image = images_enhanced[0]
