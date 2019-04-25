@@ -6,6 +6,7 @@ from PIL import Image
 import numpy as np
 from matplotlib import pylab as plt
 import scipy
+import cv2
 
 verbose = True
 
@@ -19,11 +20,21 @@ if __name__ == "__main__":
         print('min', np.array(images[0]).min())
 
     images_enhanced = []
+    block_sz = 11
 
-    for image in images[0:1]:
+    for image in images[0:]:
         image = enhance.contrast(image)
-        image = enhance.median_filter(image, 5)
-        image = enhance.gradient(image, 5)
+        median = enhance.median_filter(image, 5)
+
+        scipy.misc.imsave('median.jpg', median)
+
+        kernel = np.ones((3, 3), np.uint8)
+        erosion = cv2.dilate(image, kernel, iterations=1)
+        scipy.misc.imsave('erosion.jpg', erosion)
+
+        orientation_blocks = enhance.gradient(image, block_sz)
+        enhance.draw_orientation_map(
+            image, orientation_blocks, block_sz)
 
         images_enhanced.append(image)
 
