@@ -5,6 +5,8 @@ from scipy import ndimage, misc, signal
 import scipy
 import matplotlib.pyplot as plt
 import cv2
+import math
+import sys
 
 
 def normalize(image):
@@ -48,18 +50,17 @@ def plot_point(point, angle, length, ax):
    '''
    # unpack the first point
    x, y = point
-   startx = x - np.cos(angle)*length/2
    starty = y - np.sin(angle)*length/2
+   startx = x - np.cos(angle)*length/2
    # find the end point
-   endx = x + np.cos(angle)*length/2
    endy = y + np.sin(angle)*length/2
+   endx = x + np.cos(angle)*length/2
    ax.plot([startx, endx], [starty, endy], color='blue')
 
 
 def draw_orientation_map(img, angles, block_size):
    row, col = img.shape
-   print(img.shape)
-   x_center = y_center = block_size/2  # y for rowq and x for columns
+   x_center = y_center = float(block_size)/2.0  # y for rowq and x for columns
    r, c = angles.shape
    fig = plt.figure()
    ax = plt.subplot(111)
@@ -68,34 +69,21 @@ def draw_orientation_map(img, angles, block_size):
    plt.imshow(img, zorder=0, extent=[0, col, 0, row], cmap='gray')
    for i in range(0, r):
       for j in range(0, c):
-         plot_point((j*block_size + y_center, i*block_size + x_center),
-                     angles[i][j],
-                     block_size, ax)
+         # point is (x, y) # y top of the image is maximum y, in the loop is 0, therefore (r-1-i)
+         point = (j*block_size + x_center, (r-1-i)*block_size + y_center)
+         plot_point(point, angles[i][j], block_size, ax)
    plt.show()
 
+def gradient(img, blk_sz=11):
+   # dx = sobel_filter(img, 0)
+   # dy = sobel_filter(img, 1)
 
-def gradient(img, blk_sz=16):
-   scipy.misc.imsave('finger.jpg', normalize(img))
-   # dx = ndimage.sobel(img, 0)  # horizontal derivative
-   # dy = ndimage.sobel(img, 1)  # vertical derivative
-   # scipy.misc.imsave('sobel_dx.jpg', normalize(dx))
-   # scipy.misc.imsave('sobel_dy.jpg', normalize(dy))
-
-   dx = sobel_filter(img, 0)
-   dy = sobel_filter(img, 1)
-   scipy.misc.imsave('sobel_dy_con.jpg', normalize(dx))
-   scipy.misc.imsave('sobel_dx_con.jpg', normalize(dy))
-
-   dx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
-   dy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-   print("dx.max()", dx.max())
-   print("dy.max()", dy.max())
-   scipy.misc.imsave('sobel_dy_cv2.jpg', normalize(dx))
-   scipy.misc.imsave('sobel_dx_cv2.jpg', normalize(dy))
+   dy = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+   dx = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
 
 
-   img_alpha_x = dx**2 - dy**2
-   img_alpha_y = 2 * dx * dy
+   img_alpha_x = dx*dx - dy*dy
+   img_alpha_y = 2 * np.multiply(dx, dy)
    
    img_alpha_x_block = [[np.sum(img_alpha_x[index_y: index_y + blk_sz, index_x: index_x + blk_sz]) / blk_sz**2
                   for index_x in range(0, img.shape[0], blk_sz)]
@@ -105,13 +93,12 @@ def gradient(img, blk_sz=16):
                          for index_x in range(0, img.shape[0], blk_sz)]
                  for index_y in range(0, img.shape[1], blk_sz)]
 
+   img_alpha_x_block = np.array(img_alpha_x_block)
+   img_alpha_y_block = np.array(img_alpha_y_block)
 
-   img_alpha_x_block =  np.array(img_alpha_x_block)
-   img_alpha_y_block =  np.array(img_alpha_y_block)
+   orientation_blocks = np.arctan2(img_alpha_y_block, img_alpha_x_block) / 2
 
-   orientation_block = np.arctan2(img_alpha_y_block, img_alpha_x_block) / 2
-
-   return orientation_block
+   return orientation_blocks
 
 
 def sobel_filter(img, axis):
