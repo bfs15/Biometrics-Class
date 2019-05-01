@@ -1,4 +1,9 @@
 DB/
+*.7z
+*.zip
+*.tar.gz
+
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
