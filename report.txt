@@ -1,0 +1,70 @@
+
+Two techniques to find pupils were implemented 1: Canny with Hough Circles and 2: Contours (cv2.drawContours). In the end Canny was used first and Contour was a fallback if the result was poor. This combination gave the best IoU.
+
+I implemented a way to remove eyelashes from the normalized image, by detecting the section of the x-axis with most dark pixels (using a threshold).
+Example pictures are in the package.
+But this worsened the results.
+
+The experimental results:
+
+Lamp
+   Verification
+      Contour + Canny
+      IoU mean: 0.6557179398614523
+      IoU var: 0.08026728450675792
+
+      FAR, FRR
+      fps 0.34288329089832925
+      fns 0.34171349436736
+
+      Canny + Contour
+      IoU mean: 0.7428476646094172
+      IoU var: 0.0590971504085705
+
+      FAR, FRR
+      fps 0.3398909173952063
+      fns 0.3267900517478086
+
+
+   Identification
+      Using LBP features
+      accuracy:
+         mean = 0.29402
+         var  = 0.00183
+      Using Haar wavelet features
+      accuracy:
+         mean = 0.76229
+         var  = 0.00135
+
+   With eyelashes removal:
+      Verification
+      Contour + Canny
+      FAR, FRR
+      fps 0.36429478241773666
+      fns 0.368473723713838
+
+      Identification
+      Using LBP features
+      mean = 0.24738578975000003
+      var  = 0.0014233355068664726
+      Using Haar wavelet features
+      mean = 0.67746077275
+      var  = 0.0012577988318176944
+   
+Interval
+   Verification
+      Canny + Contour
+      IoU mean: 0.6099288763279016
+      IoU var: 0.06264201184540392
+      FAR, FRR
+      fps 0.37486206313822096
+      fns 0.38846049783549785
+
+
+   Identification
+      Using LBP features
+      mean = 0.32029637358974355
+      var  = 0.15320932821085237
+      Using Haar wavelet features
+      mean = 0.6017942161538462
+      var  = 0.11207115068146425
