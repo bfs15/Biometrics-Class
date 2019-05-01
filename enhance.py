@@ -30,13 +30,13 @@ def contrast(image, alpha=150, y=95):
 
 def median_filter(img, filter_size):
    median = img.copy()
-   hs = filter_size/2
+   hs = filter_size//2
    cv2.erode
    for i in range(hs, img.shape[0]-hs):
       for j in range(hs, img.shape[1]-hs):
          pixels = sorted(img[i-hs: i+hs+1, j-hs: j+hs+1].flatten())
          # dislocated median
-         median[i, j] = pixels[8 + filter_size*filter_size / 2]
+         median[i, j] = pixels[8 + filter_size*filter_size // 2]
    return median
    # return cv2.medianBlur(img, filter_size)
 
