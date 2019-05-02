@@ -91,12 +91,14 @@ def draw_orientation_map(img, angles, block_size, thicc=1):
                  (j)*block_size + x_center)
          angle = angles[i][j]
          length = block_size # total length of the line
-         starty = int(y - np.sin(angle)*length/2)
+         # down, left # add on y, sub on x
+         starty = int(y + np.sin(angle)*length/2)
          startx = int(x - np.cos(angle)*length/2)
          # find the end point
-         endy = int(y + np.sin(angle)*length/2)
+         # up, right # sub on y, add on x
+         endy = int(y - np.sin(angle)*length/2)
          endx = int(x + np.cos(angle)*length/2)
-         cv2.line(img_draw, (startx, endy), (endx, starty), (255, 0, 0), thicc)
+         cv2.line(img_draw, (startx, starty), (endx, endy), (255, 0, 0), thicc)
 
    return img_draw
 
