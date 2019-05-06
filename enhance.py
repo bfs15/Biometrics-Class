@@ -4,6 +4,7 @@ import numpy as np
 from scipy import ndimage, misc, signal
 import scipy
 import matplotlib.pyplot as plt
+import matplotlib.cm
 import cv2
 import math
 import sys
@@ -85,10 +86,11 @@ def draw_singular_points(image, poincare, block_sz, tolerance=2, thicc=2):
             if(image[(i)*block_sz, (j-1)*block_sz] == 125 or image[(i)*block_sz, (j+1)*block_sz] == 125 or image[(i-1)*block_sz, (j)*block_sz] == 125 or image[(i+1)*block_sz, (j)*block_sz] == 125):
                continue
             angle_core = 180
-            # if (poincare[i, j] > angle_core-tolerance and poincare[i, j] < angle_core+tolerance):
+            color = matplotlib.cm.hot(abs(poincare[i, j]/360))
+            color = (color[0]*255, color[1]*255, color[2]*255)
             if (np.isclose(poincare[i, j], angle_core, 0, tolerance)):
                cv2.circle(image_color, (int((j+0.5)*block_sz), int((i+0.5) * block_sz)),
-                          int(block_sz/2), (0, 125, 255), thicc)
+                           int(block_sz/2), color, thicc)
             angle_delta = -180
             # if (poincare[i, j] > angle_delta-tolerance and poincare[i, j] < angle_delta+tolerance):
             if (np.isclose(poincare[i, j], angle_delta, 0, tolerance)):
