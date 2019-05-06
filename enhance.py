@@ -40,39 +40,6 @@ def median_filter(img, filter_size):
    return median
    # return cv2.medianBlur(img, filter_size)
 
-# def plot_point(point, angle, length, ax):
-#    '''
-#       point - Tuple (x, y) coordinates of the pixel
-#       angle - orientation angle at (x,y) pixel.
-#       length - Length of the line you want to plot.
-
-#       Will plot the line on a 10 x 10 plot.
-#    '''
-#    # unpack the first point
-#    x, y = point
-#    starty = y - np.sin(angle)*length/2
-#    startx = x - np.cos(angle)*length/2
-#    # find the end point
-#    endy = y + np.sin(angle)*length/2
-#    endx = x + np.cos(angle)*length/2
-#    ax.plot([startx, endx], [starty, endy], color='blue')
-
-# def draw_orientation_map(img, angles, block_size):
-#    row, col = img.shape
-#    x_center = y_center = float(block_size)/2.0  # y for rowq and x for columns
-#    blk_no_y, blk_no_x = angles.shape
-#    fig = plt.figure()
-#    ax = plt.subplot(111)
-#    ax.set_ylim([0, row])   # set the bounds to be 10, 10
-#    ax.set_xlim([0, col])
-#    plt.imshow(img, zorder=0, extent=[0, col, 0, row], cmap='gray')
-#    for i in range(0, blk_no_y):
-#       for j in range(0, blk_no_x):
-#          # point is (x, y) # y top of the image is maximum y, in the loop is 0, therefore (blk_no_y-1-i)
-#          point = (j*block_size + x_center, (blk_no_y-1-i)*block_size + y_center)
-#          plot_point(point, angles[i][j], block_size, ax)
-#    plt.show()
-
 def draw_orientation_map(img, angles, block_size, thicc=1):
    '''
       img - Image array.
