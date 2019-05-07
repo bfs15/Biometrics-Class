@@ -31,14 +31,17 @@ if __name__ == "__main__":
             image, orientation_blocks, block_sz)
         cv2.imshow("draw_orientation_map", image_draw)
 
-        poincare = enhance.poincare_index(orientation_blocks, block_sz)
+        image_roi = enhance.region_of_interest(image, block_sz)
 
-        image = enhance.region_of_interest(image, block_sz)
+        poincare, s_type = enhance.singular_type(image_roi, orientation_blocks, block_sz)
 
-        image_draw = enhance.draw_singular_points(image, poincare, block_sz)
+        image_draw = enhance.draw_singular_points(image_roi, poincare, block_sz)
 
+        image_bin = enhance.binarize(image, block_sz)
+
+        cv2.imshow("image_bin", image_bin)
         cv2.imshow("draw_singular_points", image_draw)
-        cv2.waitKey(250)
+        cv2.waitKey(0)
         
         images_enhanced.append(image)
 
