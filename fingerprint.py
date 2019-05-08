@@ -39,7 +39,7 @@ def draw_orientation_map(img, angles, block_size, thicc=1):
    return img_draw
 
 
-def draw_singular_points(image, poincare, blk_sz, tolerance=2, thicc=2):
+def draw_singular_points(image, poincare, roi_blks, blk_sz, tolerance=2, thicc=2):
    '''
       image - Image array.
       poincare - Poincare index matrix of each block.
@@ -55,7 +55,7 @@ def draw_singular_points(image, poincare, blk_sz, tolerance=2, thicc=2):
    for i in range(1, image.shape[0]//blk_sz - 1):
       for j in range(1, image.shape[1]//blk_sz - 1):
             # if adjacent to blocks not in roi, ignore
-            if(np.any(image[(i)*blk_sz, (j-1)*blk_sz] == 125) or np.any(image[(i)*blk_sz, (j+1)*blk_sz] == 125) or np.any(image[(i-1)*blk_sz, (j)*blk_sz] == 125) or np.any(image[(i+1)*blk_sz, (j)*blk_sz] == 125)):
+            if(np.any(roi_blks[(i)*blk_sz, (j-1)*blk_sz] == 1) or np.any(roi_blks[(i)*blk_sz, (j+1)*blk_sz] == 1) or np.any(roi_blks[(i-1)*blk_sz, (j)*blk_sz] == 1) or np.any(roi_blks[(i+1)*blk_sz, (j)*blk_sz] == 1)):
                continue
 
             angle_core = 180
@@ -165,7 +165,7 @@ def reduce_points(points):
    return points
 
 
-def singular_type(image, orientation_blocks, blk_sz, tolerance=2):
+def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
    poincare = np.zeros(orientation_blocks.shape)
    blk_no_y, blk_no_x = orientation_blocks.shape
 
@@ -176,7 +176,7 @@ def singular_type(image, orientation_blocks, blk_sz, tolerance=2):
    for i in range(1, blk_no_y-1):
       for j in range(1, blk_no_x-1):
          # if adjacent to blocks not in roi, ignore
-         if(image[(i)*blk_sz, (j-1)*blk_sz] == 125 or image[(i)*blk_sz, (j+1)*blk_sz] == 125 or image[(i-1)*blk_sz, (j)*blk_sz] == 125 or image[(i+1)*blk_sz, (j)*blk_sz] == 125):
+         if(np.any(roi_blks[(i)*blk_sz, (j-1)*blk_sz] == 1) or np.any(roi_blks[(i)*blk_sz, (j+1)*blk_sz] == 1) or np.any(roi_blks[(i-1)*blk_sz, (j)*blk_sz] == 1) or np.any(roi_blks[(i+1)*blk_sz, (j)*blk_sz] == 1)):
             continue
 
          index = 0

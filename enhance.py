@@ -84,10 +84,13 @@ def binarize(img, blk_sz):
 
 def region_of_interest(img, blk_sz, gray_out=125):
    img = img.copy()
+   #
    # number of blocks in a dimension
    blk_no_y, blk_no_x = (int(img.shape[0]//blk_sz), int(img.shape[1]//blk_sz))
    blk_mean = np.zeros((blk_no_y, blk_no_x))
    blk_std = np.zeros((blk_no_y, blk_no_x))
+   # matrix mask of valid blocks, 0: valid; 1: invalid; as in numpy.ma
+   roi_blks = np.zeros(img.shape)
    # for each block i,j
    for i in range(blk_no_y):
       for j in range(blk_no_x):
@@ -113,6 +116,8 @@ def region_of_interest(img, blk_sz, gray_out=125):
             v = w0*(1-blk_mean[i, j]) + w1*blk_std[i, j] + w2
             if (v < 0.8):
                # gray out block
+               roi_blks[blk_sz*i:blk_sz *
+                        (i+1), blk_sz*j:blk_sz*(j+1)] = 1
                img[blk_sz*i:blk_sz*(i+1), blk_sz*j:blk_sz*(j+1)] = gray_out
 
-   return img
+   return img, roi_blks
