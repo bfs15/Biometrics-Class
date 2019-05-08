@@ -102,6 +102,26 @@ def gradient(img, blk_sz):
 
    return orientation_blocks
 
+def sobel_filter(img, axis):
+   img = img.astype(np.float)
+
+   if axis == 0:
+      # x axis
+      # wikipedia
+      # kernel = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float)
+      # scipy/cv2
+      kernel = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=np.float)
+   elif axis == 1:
+      # y axis
+      # wikipedia
+      # kernel = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float)
+      # scipy/cv2
+      kernel = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=np.float)
+
+   convolved = signal.convolve2d(
+       img, kernel, mode='same', boundary='wrap', fillvalue=0)
+
+   return convolved
 
 def smooth_gradient(orientation_blocks, blk_sz):
    orientation_blocks_smooth = np.zeros(orientation_blocks.shape)
@@ -274,24 +294,3 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
    print(singular_type)
    return poincare, singular_type
 
-
-def sobel_filter(img, axis):
-   img = img.astype(np.float)
-
-   if axis == 0:
-      # x axis
-      # wikipedia
-      # kernel = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float)
-      # scipy/cv2
-      kernel = np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=np.float)
-   elif axis == 1:
-      # y axis
-      # wikipedia
-      # kernel = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float)
-      # scipy/cv2
-      kernel = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=np.float)
-
-   convolved = signal.convolve2d(
-       img, kernel, mode='same', boundary='wrap', fillvalue=0)
-
-   return convolved
