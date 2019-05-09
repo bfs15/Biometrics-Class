@@ -24,7 +24,8 @@ def contrast(image, alpha=150, y=95):
    var = np.std(image)
    image = alpha + y * (image - mean) / var
 
-   image = np.where(image<0, 0,image)
+   image = np.where(image < 0, 0, image)
+   image = np.where(image > 255, 255, image)
    image = normalize(image)
    return np.uint8(image)
 
@@ -80,6 +81,21 @@ def binarize(img, blk_sz):
          else:
             img[i, j] = 0
    return img
+
+
+def smooth_bin(img, blk_sz, fil_sz, thresh):
+   img_smo = img.copy()
+   for i in range(fil_sz, img.shape[0]-fil_sz):
+      for j in range(fil_sz, img.shape[1]-fil_sz):
+         block = img[i - fil_sz: i+fil_sz+1, j-fil_sz: j+fil_sz+1]
+         black_no = np.sum(block)
+         white_no = fil_sz**2 - black_no
+         if(black_no >= thresh):
+            img_smo[i,j]= 1
+         if(white_no >= thresh):
+            img_smo[i, j] = 0
+
+   return img_smo
 
 
 def region_of_interest(img, blk_sz, gray_out=125):

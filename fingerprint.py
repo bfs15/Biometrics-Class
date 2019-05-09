@@ -9,24 +9,24 @@ import cv2
 import math
 import sys
 
-def draw_orientation_map(img, angles, block_size, thicc=1):
+def draw_orientation_map(img, angles, blk_sz, thicc=1):
    '''
       img - Image array.
       angles - orientation angle at (x,y) pixel.
-      block_size - block size of the orientation field.
+      blk_sz - block size of the orientation field.
       thicc - Thickness of the lines to plot.
    '''
-   x_center = y_center = float(block_size)/2.0  # y for rowq and x for columns
+   x_center = y_center = float(blk_sz)/2.0  # y for rowq and x for columns
    blk_no_y, blk_no_x = angles.shape
    # add color channels to ndarray
    img_draw = np.stack((img,)*3, axis=-1)
    for i in range(0, blk_no_y):
       for j in range(0, blk_no_x):
          # point is (x, y) # y top of the image is maximum y, in the loop is 0, therefore (blk_no_y-1-i)
-         y, x = ((i)*block_size + y_center,
-                 (j)*block_size + x_center)
+         y, x = ((i)*blk_sz + y_center,
+                 (j)*blk_sz + x_center)
          angle = angles[i][j]
-         length = block_size  # total length of the line
+         length = blk_sz  # total length of the line
          # down, left # add on y, sub on x
          starty = int(y + np.sin(angle)*length/2)
          startx = int(x - np.cos(angle)*length/2)
@@ -39,7 +39,7 @@ def draw_orientation_map(img, angles, block_size, thicc=1):
    return img_draw
 
 
-def draw_singular_points(image, poincare, roi_blks, blk_sz, tolerance=2, thicc=2):
+def draw_singular_points_verbose(image, poincare, roi_blks, blk_sz, tolerance=2, thicc=2):
    '''
       image - Image array.
       poincare - Poincare index matrix of each block.
@@ -74,6 +74,38 @@ def draw_singular_points(image, poincare, roi_blks, blk_sz, tolerance=2, thicc=2
             if (np.isclose(poincare[i, j], whorl, 0, tolerance)):
                cv2.circle(image_color, (int((j+0.5)*blk_sz), int((i+0.5) * blk_sz)),
                           int(blk_sz/2), (0, 200, 200), thicc)
+   return image_color
+
+
+def draw_singular_points(image, s_type, poincare, blk_sz, thicc=2):
+   '''
+      image - Image array.
+      poincare - Poincare index matrix of each block.
+      blk_sz - block size of the orientation field.
+      tolerance - Angle tolerance in degrees.
+      thicc - Thickness of the lines to plot.
+   '''
+   # add color channels to ndarray
+   if(len(image.shape) == 2):
+      image_color = np.stack((image,)*3, axis=-1)
+   else:
+      image_color = image
+
+   type_str, cores, deltas, whorls = s_type
+
+   for i, j in map(lambda x: (int(x[0]), int(x[1])), cores):
+      color = matplotlib.cm.hot(abs(poincare[i, j]/360))
+      color = (color[0]*255, color[1]*255, color[2]*255)
+      cv2.circle(image_color, (int((j+0.5)*blk_sz), int((i+0.5) * blk_sz)),
+                  int(blk_sz/2), color, thicc)
+
+   for i, j in map(lambda x: (int(x[0]), int(x[1])), deltas):
+      cv2.rectangle(image_color, (j*blk_sz, i*blk_sz),
+                    ((j+1)*blk_sz, (i+1)*blk_sz), (0, 125, 255), thicc)
+
+   for i, j in map(lambda x: (int(x[0]), int(x[1])), whorls):
+      cv2.circle(image_color, (int((j+0.5)*blk_sz), int((i+0.5) * blk_sz)),
+                  int(blk_sz/2), (0, 200, 200), thicc)
    return image_color
 
 
@@ -294,3 +326,80 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
    print(singular_type)
    return poincare, singular_type
 
+
+def minutiae(image_spook, roi_blks, blk_sz, radius=23):
+   minutiae_list = []
+   minutiae_type = np.zeros(image_spook.shape)
+
+   for i in range(radius, image_spook.shape[0] - radius):
+      for j in range(radius, image_spook.shape[1] - radius):
+         if(roi_blks[i,j] == 1):
+            continue
+         eight_nei = image_spook[i-1 : i+1+1 , j -1: j +1+1]
+         eight_nei_no = np.sum(eight_nei) - eight_nei[1, 1]
+         minutiae_type[i,j] = eight_nei_no
+
+   def clear_noise(image_spook, i, j, radius):
+
+      # block = image_spook[i-radius: i + radius, j-radius: j + radius]
+      
+      # (lambda x: 0 if(x == 1 or x == 3))(block)
+      changed = False
+      print(i,j)
+      for l in range(i-radius, i + radius):
+         for m in range(j-radius, j + radius):
+            # skip yourself
+            if(l == i and j == m):
+               continue
+            if(minutiae_type[l,m] == 1 
+               or minutiae_type[l, m] == 3):
+               changed = True
+               minutiae_type[l, m] = 0
+      if(changed):
+         minutiae_type[i,m] = 0
+      return
+
+   for i in range(radius, image_spook.shape[0] - radius):
+      for j in range(radius, image_spook.shape[1] - radius):
+         if(roi_blks[i, j] == 1):
+            continue
+         if(minutiae_type[i,j] == 0):
+            # 'isolated'
+            pass
+         elif(minutiae_type[i,j] == 1):
+            # 'ending'
+            pass
+         elif(minutiae_type[i,j] == 2):
+            # 'edgepoint'
+            pass
+         elif(minutiae_type[i,j] == 3):
+            # 'bifurcation'
+            clear_noise(minutiae_type, i, j, radius)
+            if(minutiae_type[i, j] == 3):
+               minutiae_list.append((i,j))
+         elif(minutiae_type[i,j] == 8):
+            # 'crossing'
+            pass
+               
+
+   return minutiae_list
+
+
+def minutiae_draw(image_spook, minutiae_list, size=1, thicc=1):
+   image_spook = image_spook*255
+
+   # add color channels to ndarray
+   if(len(image_spook.shape) == 2):
+      image_color = np.stack((image_spook,)*3, axis=-1)
+   else:
+      image_color = image_spook
+
+   resize_mult = 3
+   image_color = cv2.resize(
+       image_color, (resize_mult*image_color.shape[0], resize_mult*image_color.shape[1]), interpolation=cv2.INTER_NEAREST)
+
+   for minu in minutiae_list:
+      i, j = minu
+      cv2.circle(image_color, (int(j*resize_mult), int(i*resize_mult)),
+                                size, (255, 125, 0), thicc)
+   return image_color
