@@ -5,6 +5,8 @@ from scipy import ndimage, misc, signal
 import scipy
 import matplotlib.pyplot as plt
 import matplotlib.cm
+import random
+import colorsys
 import cv2
 import math
 import sys
@@ -328,12 +330,14 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
 
 
 def minutiae(image_spook, roi_blks, blk_sz, radius=23):
-   minutiae_list = []
-   minutiae_type = np.zeros(image_spook.shape)
+   # 0, 1, 3, 4 neighbors
+   minutiae_list = [[],[],[],[],[]]
+   minutiae_type = np.full(image_spook.shape, -1)
 
    for i in range(radius, image_spook.shape[0] - radius):
       for j in range(radius, image_spook.shape[1] - radius):
-         if(roi_blks[i,j] == 1):
+         # not in RoI or is background, skip it
+         if(roi_blks[i, j] == 1 or image_spook[i,j] == 0):
             continue
          eight_nei = image_spook[i-1 : i+1+1 , j -1: j +1+1]
          eight_nei_no = np.sum(eight_nei) - eight_nei[1, 1]
@@ -354,9 +358,9 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=23):
             if(minutiae_type[l,m] == 1 
                or minutiae_type[l, m] == 3):
                changed = True
-               minutiae_type[l, m] = 0
-      if(changed):
-         minutiae_type[i,m] = 0
+               minutiae_type[l, m] = -1
+      # if(changed):
+      #    minutiae_type[i, j] = -1
       return
 
    for i in range(radius, image_spook.shape[0] - radius):
@@ -365,27 +369,34 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=23):
             continue
          if(minutiae_type[i,j] == 0):
             # 'isolated'
-            pass
+            minutiae_list[0].append((i,j))
+
          elif(minutiae_type[i,j] == 1):
             # 'ending'
-            pass
+            minutiae_list[1].append((i, j))
+
          elif(minutiae_type[i,j] == 2):
             # 'edgepoint'
             pass
+            # minutiae_list[2].append((i,j))
+
          elif(minutiae_type[i,j] == 3):
             # 'bifurcation'
             clear_noise(minutiae_type, i, j, radius)
+
+            # if still minutiae after clearing
             if(minutiae_type[i, j] == 3):
-               minutiae_list.append((i,j))
-         elif(minutiae_type[i,j] == 8):
+               minutiae_list[3].append((i,j))
+
+         elif(minutiae_type[i,j] == 4):
             # 'crossing'
-            pass
+            minutiae_list[4].append((i,j))
                
 
    return minutiae_list
 
 
-def minutiae_draw(image_spook, minutiae_list, size=1, thicc=1):
+def minutiae_draw(image_spook, minutiae_list, size=1, thicc=2):
    image_spook = image_spook*255
 
    # add color channels to ndarray
@@ -398,8 +409,23 @@ def minutiae_draw(image_spook, minutiae_list, size=1, thicc=1):
    image_color = cv2.resize(
        image_color, (resize_mult*image_color.shape[0], resize_mult*image_color.shape[1]), interpolation=cv2.INTER_NEAREST)
 
-   for minu in minutiae_list:
-      i, j = minu
-      cv2.circle(image_color, (int(j*resize_mult), int(i*resize_mult)),
-                                size, (255, 125, 0), thicc)
+   random.seed(133)
+   # yellow isolated point
+   # purple endpoint
+   #
+   # red/pink bifurcation
+   # green crossing
+
+   for i in range(len(minutiae_list)):
+      minutiae_list_typed = minutiae_list[i]
+      # get next 'random' color in sequence
+      h, s, l = random.random(), 0.5 + random.random()/2.0, 0.4 + random.random()/5.0
+      color = r, g, b = [int(256*i) for i in colorsys.hls_to_rgb(h, l, s)]
+      
+      # color = (color[0]*255, color[1]*255, color[2]*255)
+      for minu in minutiae_list_typed:
+         i, j = minu
+         cv2.circle(image_color, (int(j*resize_mult+resize_mult/2), int(i*resize_mult+resize_mult/2)),
+                    size, color, thicc)
+      i += 1
    return image_color

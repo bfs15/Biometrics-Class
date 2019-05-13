@@ -10,6 +10,7 @@ import scipy
 import cv2
 import sys
 from skimage.morphology import skeletonize
+import matplotlib.cm
 
 verbose = True
 
@@ -53,6 +54,7 @@ if __name__ == "__main__":
 
         print("minutiae_list")
         print(minutiae_list)
+        
         cv2.imshow("image_draw", image_draw)
         cv2.imshow("image_smoothed", image_smoothed*255)
         cv2.imshow("image_spook", image_spook)
