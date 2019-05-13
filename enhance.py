@@ -42,12 +42,12 @@ def median_filter(img, filter_size):
    return median
    # return cv2.medianBlur(img, filter_size)
 
-def binarize(img, blk_sz):
+def binarize(img, blk_sz=3):
    img = img.copy()
    per25 = np.percentile(img, 25)
    print('per25')
    print(per25)
-   per50 = np.percentile(img, 50)
+   per50 = np.percentile(img, 30)
    print('per50')
    print(per50)
 
@@ -58,32 +58,35 @@ def binarize(img, blk_sz):
    means = np.zeros(img.shape)
 
    # number of blocks in a dimension
-   blk_no_y, blk_no_x = (int(img.shape[0]//blk_sz)+1, int(img.shape[1]//blk_sz)+1)
+   blk_no_y, blk_no_x = (int(img.shape[0]//blk_sz), int(img.shape[1]//blk_sz))
    blk_mean = np.zeros((blk_no_y, blk_no_x))
    # for each block i,j
    for i in range(blk_no_y):
       for j in range(blk_no_x):
-            block = img[blk_sz*i: blk_sz*(i+1), blk_sz*j: blk_sz*(j+1)]
-            blk_mean[i, j] = np.mean(block)
+         block = img[blk_sz*i: blk_sz*(i+1), blk_sz*j: blk_sz*(j+1)]
+         blk_mean[i, j] = np.mean(block)
 
    img = np.where(img < per25, 0, img)
-   img = np.where(img > per50, 255, img)
+   img = np.where(img >= per50, 255, img)
 
    for i in range(1, img.shape[0]-1):
       for j in range(1, img.shape[1]-1):
          if(img[i, j] == 0 or img[i, j] == 255):
             continue
-         block = img[i-1: i+1, j-1: j+1]
+         block = img[i-1: i+1+1, j-1: j+1+1]
          block = np.ma.array(block.flatten(), mask=False)
          block.mask[len(block)//2] = True
+         
          if(block.mean() >= blk_mean[i//blk_sz, j//blk_sz]):
             img[i, j] = 255
          else:
-            img[i, j] = 0
+            # img[i, j] = 255
+            # better
+            img[i, j] = 255
    return img
 
 
-def smooth_bin(img, blk_sz, fil_sz, thresh):
+def smooth_bin_filter(img, blk_sz, fil_sz, thresh):
    img_smo = img.copy()
    for i in range(fil_sz, img.shape[0]-fil_sz):
       for j in range(fil_sz, img.shape[1]-fil_sz):
@@ -91,12 +94,18 @@ def smooth_bin(img, blk_sz, fil_sz, thresh):
          black_no = np.sum(block)
          white_no = fil_sz**2 - black_no
          if(black_no >= thresh):
-            img_smo[i,j]= 1
+            img_smo[i, j] = 1
          if(white_no >= thresh):
             img_smo[i, j] = 0
 
    return img_smo
 
+def smooth_bin(img, blk_sz):
+   img_smo = img.copy()
+   for fil_sz, thresh in [(3, 18),(1, 5)]:
+      img_smo = smooth_bin_filter(img, blk_sz, fil_sz, thresh)
+
+   return img_smo
 
 def region_of_interest(img, blk_sz, gray_out=125):
    img = img.copy()

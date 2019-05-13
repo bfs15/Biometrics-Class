@@ -25,10 +25,11 @@ if __name__ == "__main__":
         print( y.sum())
         image = enhance.contrast(image)
         image = enhance.median_filter(image, 5)
-        image_bin = enhance.binarize(image, blk_sz)
+        image_bin = enhance.binarize(image)
+        cv2.imshow("image_bin", image_bin)
         image_spook = np.where(image_bin < 255, 1, 0).astype('uint8')
-        image_bin = enhance.smooth_bin(image, blk_sz)
-        image_spook = skeletonize(image_spook).astype('uint8')
+        image_smoothed = enhance.smooth_bin(image_spook, blk_sz)
+        image_spook = skeletonize(image_smoothed).astype('uint8')
 
         image_roi, roi_blks = enhance.region_of_interest(image, blk_sz)
 
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         print("minutiae_list")
         print(minutiae_list)
         cv2.imshow("image_draw", image_draw)
-        cv2.imshow("image_bin", image_bin)
+        cv2.imshow("image_smoothed", image_smoothed*255)
         cv2.imshow("image_spook", image_spook)
         cv2.waitKey(0)
         
