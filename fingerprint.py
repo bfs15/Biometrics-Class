@@ -329,7 +329,7 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
    return poincare, singular_type
 
 
-def minutiae(image_spook, roi_blks, blk_sz, radius=23):
+def minutiae(image_spook, roi_blks, blk_sz, radius=8):
    # 0, 1, 3, 4 neighbors
    minutiae_list = [[],[],[],[],[]]
    minutiae_type = np.full(image_spook.shape, -1)
@@ -350,22 +350,27 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=23):
       # (lambda x: 0 if(x == 1 or x == 3))(block)
       changed = False
       print(i,j)
-      for l in range(i-radius, i + radius):
-         for m in range(j-radius, j + radius):
-            # skip yourself
-            if(l == i and j == m):
-               continue
-            if(minutiae_type[l,m] == 1 
-               or minutiae_type[l, m] == 3):
-               changed = True
-               minutiae_type[l, m] = -1
-      # if(changed):
-      #    minutiae_type[i, j] = -1
+
+      if minutiae_type[i, j] == 1 or minutiae_type[i, j] == 3:
+         for l in range(i-radius, i + radius):
+            for m in range(j-radius, j + radius):
+               # skip yourself
+               if(l == i and j == m):
+                  continue
+               if(minutiae_type[l,m] == 1
+                  or minutiae_type[l, m] == 3):
+                  changed = True
+                  minutiae_type[l, m] = -1
+         if(changed):
+            minutiae_type[i, j] = -1
       return
 
-   for i in range(radius, image_spook.shape[0] - radius):
-      for j in range(radius, image_spook.shape[1] - radius):
-         if(roi_blks[i, j] == 1):
+   for i in range(blk_sz, image_spook.shape[0] - blk_sz):
+      for j in range(blk_sz, image_spook.shape[1] - blk_sz):
+         if((roi_blks[i + blk_sz, j - blk_sz] == 1) or (roi_blks[i + blk_sz, j + blk_sz] == 1) or (roi_blks[i - blk_sz, j + blk_sz] == 1) or (roi_blks[i - blk_sz, j - blk_sz] == 1)):
+            continue
+
+         if(roi_blks[i, j] == 1 or minutiae_type[i, j] == -1):
             continue
          if(minutiae_type[i,j] == 0):
             # 'isolated'
@@ -373,7 +378,11 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=23):
 
          elif(minutiae_type[i,j] == 1):
             # 'ending'
-            minutiae_list[1].append((i, j))
+            clear_noise(minutiae_type, i, j, radius)
+
+            # if still minutiae after clearing
+            if(minutiae_type[i, j] == 1):
+               minutiae_list[1].append((i, j))
 
          elif(minutiae_type[i,j] == 2):
             # 'edgepoint'
