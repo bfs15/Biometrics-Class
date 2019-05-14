@@ -5,6 +5,8 @@ from PIL import Image
 import numpy as np
 from matplotlib import pylab as plt
 
+import fingerprint
+
 def fingerprints(path_in, filetypeExt_in = "raw"):
 	images = []
 	subject_nos = []
@@ -19,6 +21,7 @@ def fingerprints(path_in, filetypeExt_in = "raw"):
 		name = name.lower()
 		subject_no = int(name.split('r')[0][1:])
 		label = readLabel(os.path.join(pathLabel, name + ".lif"))
+		print(label)
 
 		image = image.reshape([300, -1])
 
@@ -56,8 +59,15 @@ def readLabel(fileName):
 		for p in s["points"]:
 			singular_pts[index].append((p[0], p[1]))
 		
-	print(singular_pts,'\n')
-	return singular_pts
+	print(singular_pts, '\n')
+	
+	# append whorl list that is not on labels
+	singular_pts.append([])
+
+	singular_type = fingerprint.singular_type(singular_pts)
+
+	return singular_type, singular_pts
+
 
 def labels(path = '.'):
 

@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
         start_time = time.time()
 
-        poincare, singular_type, singular_pts = fingerprint.singular_type(
+        poincare, singular_type, singular_pts = fingerprint.singular_pts(
             image_roi, orientation_blocks, roi_blks, blk_sz)
 
         elapsed_time = time.time() - start_time
