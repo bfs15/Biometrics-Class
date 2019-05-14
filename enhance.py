@@ -45,11 +45,11 @@ def median_filter(img, filter_size):
 def binarize(img, blk_sz=3):
    img = img.copy()
    per25 = np.percentile(img, 25)
-   print('per25')
-   print(per25)
    per50 = np.percentile(img, 30)
-   print('per50')
-   print(per50)
+   # print('per25')
+   # print(per25)
+   # print('per50')
+   # print(per50)
 
    # hist, bins = np.histogram(img, 256, [0, 256])
    # plt.hist(img.ravel(), 256, [0, 256])

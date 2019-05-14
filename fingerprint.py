@@ -10,6 +10,7 @@ import colorsys
 import cv2
 import math
 import sys
+import time
 
 def draw_orientation_map(img, angles, blk_sz, thicc=1):
    '''
@@ -79,7 +80,7 @@ def draw_singular_points_verbose(image, poincare, roi_blks, blk_sz, tolerance=2,
    return image_color
 
 
-def draw_singular_points(image, s_type, poincare, blk_sz, thicc=2):
+def draw_singular_points(image, singular_pts, poincare, blk_sz, thicc=2):
    '''
       image - Image array.
       poincare - Poincare index matrix of each block.
@@ -93,7 +94,10 @@ def draw_singular_points(image, s_type, poincare, blk_sz, thicc=2):
    else:
       image_color = image
 
-   type_str, cores, deltas, whorls = s_type
+   # cores, deltas, whorls = singular_pts/blk_sz
+   divide_tuple_by_blk_sz = lambda point_blk: (point_blk[0]/blk_sz, point_blk[1]/blk_sz)
+   cores, deltas, whorls = [map(divide_tuple_by_blk_sz, singular_pts_typed)
+                            for singular_pts_typed in singular_pts]
 
    for i, j in map(lambda x: (int(x[0]), int(x[1])), cores):
       color = matplotlib.cm.hot(abs(poincare[i, j]/360))
@@ -313,22 +317,27 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
          return 'right'
 
    if(whorls or len(cores) == 2 or len(deltas) == 2):
-      singular_type = ('whorl', cores, deltas, whorls)
+      singular_type = 'whorl'
    elif (len(deltas) <= 1 and len(cores) <= 1):
       position = points_position(cores, deltas)
       if(position == 'middle'):
-         singular_type = ('arch', cores, deltas, whorls)
+         singular_type = 'arch'
 
       if(position == 'right'):
-         singular_type = ('left_loop', cores, deltas, whorls)
+         singular_type = 'left_loop'
 
       if(position == 'left'):
-         singular_type = ('right_loop', cores, deltas, whorls)
+         singular_type = 'right_loop'
    else:
-         singular_type = ('other', cores, deltas, whorls)
+         singular_type = 'other'
+      
+   def blkToCoord(points_blk):
+      return [(point_blk[0]*blk_sz, point_blk[1]*blk_sz) for point_blk in points_blk]
+   cores = blkToCoord(cores)
+   deltas = blkToCoord(deltas)
+   whorls = blkToCoord(whorls)
 
-   print(singular_type)
-   return poincare, singular_type
+   return poincare, singular_type, [cores, deltas, whorls]
 
 
 def minutiae(image_spook, roi_blks, blk_sz, radius=8):
