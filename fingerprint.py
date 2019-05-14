@@ -225,7 +225,7 @@ def reduce_points(points):
 	return points
 
 # tolerance in blocks
-def points_position(cores, deltas, tolerance=2):
+def points_position(cores, deltas, tolerance=1):
 	if(not deltas or not cores):
 		return 'middle'
 
@@ -239,23 +239,38 @@ def points_position(cores, deltas, tolerance=2):
 	else:
 		return 'right'
 
-def singular_type(singular_pts):
+def singular_type_classify(singular_pts):
 	cores, deltas, whorls = singular_pts
+
+	# if there is a delta and more than one core
+	# get middlemost core to decide if left or right loop
+
+	# if(len(cores) > 1 and len(deltas) == 1):
+	# 	# get the middlemost core
+	# 	middle_point = np.array([300/(11*2), 300/(11*2)])
+	# 	distances = []
+	# 	for j_core in range(len(cores)):
+	# 		core = cores[j_core]
+
+	# 		distances.append(np.linalg.norm(middle_point - np.array(core)))
+	# 	ordered_arg_dist = np.argsort(distances)
+		
+	# 	cores = [cores[ordered_arg_dist[0]]]
+
 	if(whorls or len(cores) == 2 or len(deltas) == 2):
-		singular_type = 'whorl'
+		return 'whorl'
 	elif (len(deltas) <= 1 and len(cores) <= 1):
 		position = points_position(cores, deltas)
 		if(position == 'middle'):
-			singular_type = 'arch'
+			return 'arch'
 
 		if(position == 'right'):
-			singular_type = 'left_loop'
+			return 'left_loop'
 
 		if(position == 'left'):
-			singular_type = 'right_loop'
+			return 'right_loop'
 	else:
-			singular_type = 'other'
-	return singular_type
+			return 'other'
 
 def singular_pts(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
 	poincare = np.zeros(orientation_blocks.shape)
@@ -333,10 +348,12 @@ def singular_pts(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
 	# print(deltas)
 	# print(whorls)
 
-	singular_type = singular_type([cores, deltas, whorls])
+	singular_type = singular_type_classify([cores, deltas, whorls])
 		
+	# (y,x) in blk changes to (y, x) in pixels
 	def blkToCoord(points_blk):
 		return [(point_blk[0]*blk_sz, point_blk[1]*blk_sz) for point_blk in points_blk]
+
 	cores = blkToCoord(cores)
 	deltas = blkToCoord(deltas)
 	whorls = blkToCoord(whorls)

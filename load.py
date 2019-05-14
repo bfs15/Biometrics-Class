@@ -7,7 +7,8 @@ from matplotlib import pylab as plt
 
 import fingerprint
 
-def fingerprints(path_in, filetypeExt_in = "raw"):
+
+def fingerprints(path_in, blk_sz, filetypeExt_in="raw"):
 	images = []
 	subject_nos = []
 	singular_pts = []
@@ -20,8 +21,8 @@ def fingerprints(path_in, filetypeExt_in = "raw"):
 		name = os.path.splitext(base)[0]
 		name = name.lower()
 		subject_no = int(name.split('r')[0][1:])
-		label = readLabel(os.path.join(pathLabel, name + ".lif"))
-		print(label)
+		label = readLabel(os.path.join(pathLabel, name + ".lif"), blk_sz)
+		# print(label)
 
 		image = image.reshape([300, -1])
 
@@ -38,11 +39,12 @@ import json
 import os
 
 
-def readLabel(fileName):
+def readLabel(fileName, blk_sz):
 	file_data = open(fileName).read()
 	data = json.loads(file_data)
-	# core, delta
-	singular_pts = [[], []]
+	# core, delta, whorls
+	singular_pts = [[], [], []]
+	singular_pts_blk = [[], [], []]
 
 	# print(fileName)
 	for es, s in enumerate(data["shapes"]):
@@ -57,14 +59,15 @@ def readLabel(fileName):
 			index = 1
 
 		for p in s["points"]:
-			singular_pts[index].append((p[0], p[1]))
+			singular_pts[index].append((p[1], p[0]))
+			singular_pts_blk[index].append((int(p[1]/blk_sz), int(p[0]/blk_sz)))
 		
-	print(singular_pts, '\n')
-	
-	# append whorl list that is not on labels
-	singular_pts.append([])
+	# print(singular_pts, '\n')
 
-	singular_type = fingerprint.singular_type(singular_pts)
+	singular_pts_blk[0] = fingerprint.reduce_points(singular_pts_blk[0])
+	singular_pts_blk[1] = fingerprint.reduce_points(singular_pts_blk[1])
+
+	singular_type = fingerprint.singular_type_classify(singular_pts_blk)
 
 	return singular_type, singular_pts
 
@@ -76,5 +79,5 @@ def labels(path = '.'):
 		
 	for f in files:
 		# print(f)
-		readLabel(f)
+		readLabel(f, 11)
 
