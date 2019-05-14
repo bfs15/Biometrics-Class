@@ -186,10 +186,12 @@ def reduce_points(points):
       j = 1
       while (i+j) < len(points):
          point_o = points[i+j]
-         # vertical down
+         # vertical down vertical middle
          if((point[1] == point_o[1] and (point[0] + 1 == point_o[0]))
-            # horizontal right
+            # vertical middle horizontal right
             or (point[0] == point_o[0] and (point[1] + 1 == point_o[1]))
+            # down left
+            or (point[0] + 1 == point_o[0] and (point[1] - 1 == point_o[1]))
             # diagonal down right
             or (point[0]+1 == point_o[0] and point[1]+1 == point_o[1])):
 
@@ -291,17 +293,17 @@ def singular_type(image, orientation_blocks, roi_blks, blk_sz, tolerance=2):
    cores = reduce_points(cores)
    deltas = reduce_points(deltas)
    whorls = reduce_points(whorls)
-   print(cores)
-   print(deltas)
-   print(whorls)
+   # print(cores)
+   # print(deltas)
+   # print(whorls)
 
+   # tolerance in blocks
    def points_position(cores, deltas, tolerance=2):
       if(not deltas or not cores):
          return 'middle'
 
       delta = deltas[0]
       core = cores[0]
-      print(delta[1], core[1])
       if(np.isclose(delta[1], core[1], 0, tolerance)):
          return 'middle'
 
@@ -349,7 +351,6 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=8):
       
       # (lambda x: 0 if(x == 1 or x == 3))(block)
       changed = False
-      print(i,j)
 
       if minutiae_type[i, j] == 1 or minutiae_type[i, j] == 3:
          for l in range(i-radius, i + radius):

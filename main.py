@@ -54,10 +54,10 @@ if __name__ == "__main__":
             image_draw, s_type, poincare, blk_sz)
 
         # cv2.imshow("image_draw", image_draw)
-        cv2.imshow("image_spook", image_spook)
-        cv2.waitKey(0)
+        # cv2.imshow("image_spook", image_spook)
+        # cv2.waitKey(0)
         
-        images_templated.append(image_spook, s_type, minutiae_list)
+        images_templated.append((image_spook, s_type, minutiae_list))
 
         # draw_orientation_map and cv2.imshow together bug out
         # cv2.imshow("img", image)
