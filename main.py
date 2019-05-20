@@ -200,14 +200,16 @@ if __name__ == "__main__":
     # print("singular_pts_accuracy=",singular_pts_accuracy)
     # print("mean mse=", mse_sum/len(images[0:]))
 
+    compare.match(finger_templates[0], finger_templates[1])
+    compare.match(finger_templates[0], finger_templates[2])
     compare.match(finger_templates[0], finger_templates[4])
     compare.match(finger_templates[0], finger_templates[5])
 
     sys.stdout.flush()
 
-    drawTemplate(finger_templates, 0)
-    drawTemplate(finger_templates, 4)
-    drawTemplate(finger_templates, 5)
+    # drawTemplate(finger_templates, 0)
+    # drawTemplate(finger_templates, 4)
+    # drawTemplate(finger_templates, 5)
 
-    cv2.waitKey(0)
+    # cv2.waitKey(0)
     

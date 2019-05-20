@@ -56,12 +56,11 @@ def rotate(point, angle, origin=(0, 0)):
 
 def rotate_minutiae(minA, angleA, minB, angleB):
    angleDiff = angleA - angleB
-   print("\n> angleDiff")
-   print(angleDiff)
+   print("angleDiff =", angleDiff)
 
    if(abs(np.degrees(angleDiff)) > 30):
       print("--- Failed to rotate minutiae")
-      print("angles too different")
+      print("reason: angles too different\n")
       return minA, minB
 
    for i_type in range(len(minB)):
@@ -76,13 +75,11 @@ def rotate_minutiae(minA, angleA, minB, angleB):
 
 def match(tempA, tempB):
    print("")
-   print("compare")
-   print("subj_no")
+   print("compare subj_no")
    print(tempA[0], " == ", tempB[0])
-   print("index")
+   print("img index")
    print(tempA[-3], " == ", tempB[-3])
    sys.stdout.flush()
-
 
    minA_cent = centralize(tempA)
    minB_cent = centralize(tempB)
@@ -95,15 +92,15 @@ def match(tempA, tempB):
    # # list of coordinates ([0] = cores; [1] = deltas; [2] = whorls)
    # print(np.array(tempA[2][0]))
 
-   score = 0
-   mse, score = minutia_match(minA, minB)
+   scores = minutia_match(minA, minB)
 
-   print("mse")
-   print(mse)
-   print("score")
-   print(score)
-   print("-----------")
-   return mse, score
+   print(">> results [match_score, mse, mse_threshold]")
+   # print(tempA[0], " == ", tempB[0])
+   # print("img index")
+   # print(tempA[-3], " == ", tempB[-3])
+   print(scores)
+
+   return scores
 
 
 # images, subject_nos, singular_pts
@@ -111,71 +108,100 @@ def minutia_match(pointsTypedA, pointsTypedB, threshold=16):
    mse = 0
    points = 0
    match_score = 0
-   
+   mse_threshold = 0
+   mse_threshold_pts = 0
+   # for each minutiae type
    for type_no in range(len(pointsTypedA)):
-      print("> type_no")
-      print(type_no)
-      print("pointsTypedA[type_no].size")
-      print(pointsTypedA[type_no].size)
-      print("pointsTypedB[type_no].size")
-      print(pointsTypedB[type_no].size)
-      sys.stdout.flush()
+      # print("> type_no")
+      # print(type_no)
+      # print("pointsTypedA[type_no].size")
+      # print(pointsTypedA[type_no].size//2)
+      # print("pointsTypedB[type_no].size")
+      # print(pointsTypedB[type_no].size//2)
+      # sys.stdout.flush()
 
-      pointsA = pointsTypedA[type_no]
-      pointsB = pointsTypedB[type_no]
-
+      # get each point list; e.g. points = [[y0,x0], [y1,x1], [y2,x2], [y3,x3]]
+      pointsA = np.array(pointsTypedA[type_no])
+      pointsB = np.array(pointsTypedB[type_no])
+      
+      # make distance matrix between points
+      # O(n^2) every point with each other
       distances_shape = (len(pointsA), len(pointsB))
       distances = np.full(distances_shape, -1)
-      for i_pred in range(len(pointsA)):
-            for j_true in range(len(pointsB)):
-               # distances[i_pred, j_true] = np.sqrt(
-               #     (pred[i_pred][0]-true[j_true][0]) ** 2 + (pred[i_pred][1]-true[j_true][1]) ** 2)
-               distances[i_pred, j_true] = np.linalg.norm(
-                  np.array(pointsA[i_pred]) - np.array(pointsB[j_true]))
+      for i_A in range(len(pointsA)):
+         for j_B in range(len(pointsB)):
+            # distances[i_A, j_B] = np.sqrt(
+            #     (pointsA[i_A][0]-pointsB[j_B][0]) ** 2 + (pointsA[i_A][1]-pointsB[j_B][1]) ** 2)
 
-      # print("distances")
-      # print(distances)
-      print("distances sort")
-      print(np.sort(distances.flatten()))
+            # distance between two points: pointsA[i_A], pointsB[j_B]
+            distances[i_A, j_B] = np.linalg.norm(pointsA[i_A] - pointsB[j_B])
+
+      # # print("distances")
+      # # print(distances)
+      # print("distances sort")
+      # print(np.sort(distances.flatten()))
       sys.stdout.flush()
 
       dist_arg_sort = np.dstack(np.unravel_index(
          np.argsort(distances.ravel()), distances_shape))[0]
       mask = np.ones(len(dist_arg_sort), dtype=bool)
       for i_arg_dist in range(len(dist_arg_sort)):
+         # skip points already matched
          if(mask[i_arg_dist] == False):
             continue
+         # get what points are closest to each other
          dist_smallest_arg = dist_arg_sort[i_arg_dist]
+         # how much is that smallest distance?
          dist_smallest = distances[dist_smallest_arg[0], dist_smallest_arg[1]]
-         if(dist_smallest > threshold):
-            print("--- Reached threshold after ", i_arg_dist, " points")
-            print("--- distance of ", dist_smallest, " pixels")
-            break
 
+         # mse with no threshold
          mse += dist_smallest ** 2
-         match_score += 1 - (dist_smallest / threshold)
          points += 1
 
-         # mask used points
+         # mask points just matched
          maskIndexes = np.where(
-            (dist_arg_sort[:, 0] == dist_smallest_arg[0]))
+             (dist_arg_sort[:, 0] == dist_smallest_arg[0]))
          mask[maskIndexes] = False
 
          maskIndexes = np.where(
-            (dist_arg_sort[:, 1] == dist_smallest_arg[1]))
+             (dist_arg_sort[:, 1] == dist_smallest_arg[1]))
          mask[maskIndexes] = False
 
          mask[i_arg_dist] = True
+         # mask points just matched
+
+         # ignore points with distance over threshold
+         if(dist_smallest <= 33):
+            mse_threshold_pts += 1
+            mse_threshold += dist_smallest ** 2
+
+         # don't sum points with distance over threshold
+         if(dist_smallest > threshold):
+            # print("--- Reached threshold after ", i_arg_dist, " points")
+            # print("--- distance of ", dist_smallest, " pixels")
+            continue
+         match_score += 1 - (dist_smallest / threshold)
 
       # # what do if there are different quantity of points?
       # if(len(pointsA) != len(pointsB)):
       #    pass
-      
-      print("")
-      print("")
+
+      # points = min(pointsTypedA[type_no].size//2, pointsTypedB[type_no].size//2)
+
+      # if points > 0:
+      #    print("match_score")
+      #    print(100*match_score/(points))
+      #    print("mse")
+      #    print(mse/(points*2))
+      # if mse_threshold_pts > 0:
+      #    print("mse_threshold")
+      #    print(mse_threshold/(mse_threshold_pts*2))
+      # print("")
+
+   mse_threshold = mse_threshold/(mse_threshold_pts*2)
    mse = mse/(points*2)
    match_score = 100*match_score/(points)
-   return mse, match_score
+   return [match_score, mse, mse_threshold]
 
 
 # images, subject_nos, singular_pts
