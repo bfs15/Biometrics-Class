@@ -404,33 +404,33 @@ def minutiae(image_spook, roi_blks, blk_sz, radius=8):
 
 			if(roi_blks[i, j] == 1 or minutiae_type[i, j] == -1):
 				continue
+			# 'isolated'
 			if(minutiae_type[i,j] == 0):
-				# 'isolated'
 				minutiae_list[0].append((i,j))
 
+			# 'ending'
 			elif(minutiae_type[i,j] == 1):
-				# 'ending'
 				clear_noise(minutiae_type, i, j, radius)
 
 				# if still minutiae after clearing
 				if(minutiae_type[i, j] == 1):
 					minutiae_list[1].append((i, j))
 
+			# 'edgepoint'
 			elif(minutiae_type[i,j] == 2):
-				# 'edgepoint'
 				pass
 				# minutiae_list[2].append((i,j))
 
+			# 'bifurcation'
 			elif(minutiae_type[i,j] == 3):
-				# 'bifurcation'
 				clear_noise(minutiae_type, i, j, radius)
 
 				# if still minutiae after clearing
 				if(minutiae_type[i, j] == 3):
 					minutiae_list[3].append((i,j))
 
+			# 'crossing'
 			elif(minutiae_type[i,j] == 4):
-				# 'crossing'
 				minutiae_list[4].append((i,j))
 					
 
