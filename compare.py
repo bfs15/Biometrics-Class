@@ -74,11 +74,11 @@ def rotate_minutiae(minA, angleA, minB, angleB):
 
 
 def match(tempA, tempB):
-   print("")
-   print("compare subj_no")
-   print(tempA[0], " == ", tempB[0])
-   print("img index")
-   print(tempA[-3], " == ", tempB[-3])
+   # print("")
+   # print("compare subj_no")
+   # print(tempA[0], " == ", tempB[0])
+   # print("img index")
+   # print(tempA[-3], " == ", tempB[-3])
    sys.stdout.flush()
 
    minA_cent = centralize(tempA)

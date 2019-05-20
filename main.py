@@ -3,6 +3,7 @@ import load
 import enhance
 import fingerprint
 import compare
+import stats
 
 from PIL import Image
 import numpy as np
@@ -27,12 +28,14 @@ if __name__ == "__main__":
     singular_pts_correct_no = 0
 
     index_start = 0
+    step = 2
+    index_end = 4*2 # exclusive
     print("(len(images[0:]))")
     print(len(images[0:]))
     print("(len(images[index_start:]))")
     print(len(images[index_start:]))
     print(range(index_start, len(images[index_start:])))
-    for image_index in range(index_start, len(images[0:6])):
+    for image_index in range(index_start, len(images[index_start:index_end]), step):
         print(">>>\t image_index ", image_index)
         print(">\t subject_nos[image_index]", subject_nos[image_index])
         image = images[image_index]
@@ -200,12 +203,7 @@ if __name__ == "__main__":
     # print("singular_pts_accuracy=",singular_pts_accuracy)
     # print("mean mse=", mse_sum/len(images[0:]))
 
-    compare.match(finger_templates[0], finger_templates[1])
-    compare.match(finger_templates[0], finger_templates[2])
-    compare.match(finger_templates[0], finger_templates[4])
-    compare.match(finger_templates[0], finger_templates[5])
-
-    sys.stdout.flush()
+    stats.distanceMatrix(finger_templates, compare.match)
 
     # drawTemplate(finger_templates, 0)
     # drawTemplate(finger_templates, 4)
