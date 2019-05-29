@@ -8,6 +8,28 @@ from matplotlib import pylab as plt
 import fingerprint
 
 
+def fingerprintsL(path_in, blk_sz, filetypeExt_in="raw"):
+	images = []
+	subject_nos = []
+	singular_pts = []
+
+	for pathFilename in sorted(glob.iglob(os.path.join(path_in, "*." + filetypeExt_in))):
+		image = np.fromfile(pathFilename, dtype='int8')
+		base = os.path.basename(pathFilename)
+		name = os.path.splitext(base)[0]
+		name = name.lower()
+		subject_no = int(name[1:4])
+
+		image = image.reshape([300, -1])
+
+		image = Image.fromarray(image)
+
+		images.append(image)
+		subject_nos.append(subject_no)
+
+	return images, subject_nos, singular_pts
+
+
 def fingerprints(path_in, blk_sz, filetypeExt_in="raw"):
 	images = []
 	subject_nos = []

@@ -1,0 +1,27 @@
+
+The FAR and FRR were bad achieving in the equal error rate 0.3660.
+This was achieved by mse_threshold, a different metric other than Match Score (which had EER 0.7428).
+mse_threshold is just mse that ignores points over the distance threshold of 33px.
+
+fps_3 0.3416
+fns_3 0.3660
+
+The identification accuracy was also bad, couldn't figure out why.
+identification accuracy:
+0.1964
+
+This was by far the hardest assignment, probably because you had to adjust every step of the way, almost nothing works as is in the slides that well, if you even implemented correctly.
+
+the other metrics:
+   fps_0 0.7428
+   fns_0 0.7291
+   fps_1 0.4358
+   fns_1 0.4494
+   fps_2 0.4449
+   fns_2 0.4732
+   fps_3 0.3416
+   fns_3 0.3660
+
+   id_accuracy
+   [0.19642857142857142, 0.05357142857142857, 0.044642857142857144, 0.10714285714285714]
+
