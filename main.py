@@ -19,6 +19,7 @@ import time
 from skimage.feature import hog
 from skimage import data, exposure
 from sklearn import svm
+from sklearn import metrics
 from sklearn import model_selection
 
 verbose = True
@@ -222,8 +223,8 @@ if __name__ == "__main__":
 	cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
 	print(cv_results)
 
-	y_pred = cross_val_predict(clf, x_train, y_train, cv=4)
-	conf_mat = confusion_matrix(y_train, y_pred)
+	y_pred = model_selection.cross_val_predict(clf, x_train, y_train, cv=4)
+	conf_mat = metrics.confusion_matrix(y_train, y_pred)
 	print(conf_mat)
 
 	plt.imshow(conf_mat, cmap='binary', interpolation='None')
