@@ -1,3 +1,4 @@
+#! python2
 
 import load
 # import enhance
@@ -7,6 +8,7 @@ import load
 
 from PIL import Image
 import numpy as np
+import math
 from matplotlib import pylab as plt
 import scipy
 import cv2
@@ -17,6 +19,7 @@ import time
 from skimage.feature import hog
 from skimage import data, exposure
 from sklearn import svm
+from sklearn import model_selection
 
 verbose = True
 
@@ -78,12 +81,22 @@ def GradientHistogram(mag, angle, cellSz=8, binSz=9):
 	for bins_y in range(bins.shape[0]):
 		for bins_x in range(bins.shape[1]):
 			cellMag = mag[(bins_y+0)*cellSz: (bins_y+1)*cellSz,
-									 (bins_x+0)*cellSz: (bins_x+1)*cellSz]
+                            (bins_x+0)*cellSz: (bins_x+1)*cellSz].flatten()
 			cellAngle = angle[(bins_y+0)*cellSz: (bins_y+1)*cellSz,
-									 (bins_x+0)*cellSz: (bins_x+1)*cellSz]
+									 (bins_x+0)*cellSz: (bins_x+1)*cellSz].flatten()
 
-			hist, bin_edges = np.histogram(cellAngle, bins=binSz, range=(0, 180), normed=None,
-											 weights=cellMag, density=None)
+			# tri-linear histogram
+			hist = [0]*binSz
+			for angleEl, magEl in zip(cellAngle, cellMag):
+				pos = angleEl/(180/binSz) - 0.5
+				index = int(math.floor(pos)) % binSz
+				weight = abs(pos - int(pos))
+				hist[index] = (1-weight)*magEl
+				hist[(index+1) % binSz] = (weight)*magEl
+
+			hist = np.array(hist)
+
+			# hist, bin_edges = np.histogram(cellAngle, bins=binSz, range=(0, 180), normed=None, weights=cellMag, density=None)
 			
 			bins[bins_y, bins_x] = hist
 	
@@ -141,8 +154,8 @@ def windowHog(image):
 	return binsNorm.flatten()
 
 
-def extractWindows(image, stride=8, winSz=(128,64)):
-	image = cv2.copyMakeBorder(image, winSz[0]//2, winSz[0]//2, winSz[1]//2, winSz[1]//2, cv2.BORDER_REPLICATE)
+def extractWindows(image, stride=128, winSz=(128, 64)):
+	image = cv2.copyMakeBorder(image, winSz[0]//4, winSz[0]//4, winSz[1]//4, winSz[1]//4, cv2.BORDER_REPLICATE)
 	for win_y in range(0, image.shape[0]-winSz[0], stride):
 		for win_x in range(0, image.shape[1]-winSz[1], stride):
 			yield image[win_y : win_y + winSz[0]  ,  win_x : win_x + winSz[1]]
@@ -156,41 +169,62 @@ if __name__ == "__main__":
 	x_train = []
 	y_train = []
 
-	for image, image_arg in imagesNeg:
+	for image_arg, image in enumerate(imagesNeg):
+		if image_arg > 200:
+			break
+
+		# start_time = time.time()
+
 		image = np.array(image)
 
 		for imageLevel in pyramidCreate(image):
 			for window in extractWindows(imageLevel):
+				# cv2.imshow("win", window)
+				# cv2.waitKey(100)
 				features = windowHog(window)
+
 				x_train.append(features)
-				y_train.append(1)
+				y_train.append(-1)
 				if(np.isnan(features).any()):
+					print("- warning: nan features")
 					print("window.shape")
 					print(window.shape)
 					print(features)
-				sys.stdout.flush()
+					sys.stdout.flush()
+				
+		# elapsed_time = time.time() - start_time
+		# print("%.5f" % elapsed_time, 'HOG')
+		# total_time += elapsed_time
 	
-	
-
-	for image, image_arg in images:
+	for image_arg, image  in enumerate(images):
 		image = np.array(image)
 
-		start_time = time.time()
+		# start_time = time.time()
 
 		features = windowHog(image)
 
-		elapsed_time = time.time() - start_time
-		print(elapsed_time, 'HOG')
-		total_time += elapsed_time
+		# elapsed_time = time.time() - start_time
+		# print(elapsed_time, 'HOG ', image_arg)
+		# total_time += elapsed_time
 
 		x_train.append(features)
-		y_train.append(0)
+		y_train.append(1)
 
-		cv2.imshow("image"+str(image_arg), image)
-		cv2.waitKey(0)
-		cv2.destroyAllWindows()
+		# cv2.imshow("image"+str(image_arg), image)
+		# cv2.waitKey(100)
+		# cv2.destroyAllWindows()
 
-	# clf = sklearn.svm.SVC()
-	# # clf = sklearn.svm.OneClassSVM()
+	clf = svm.SVC(gamma='auto')
+	# clf = sklearn.svm.OneClassSVM()
 	# clf.fit(x_train, y_train)
 
+
+	cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
+	print(cv_results)
+
+	y_pred = cross_val_predict(clf, x_train, y_train, cv=4)
+	conf_mat = confusion_matrix(y_train, y_pred)
+	print(conf_mat)
+
+	plt.imshow(conf_mat, cmap='binary', interpolation='None')
+	plt.show()
