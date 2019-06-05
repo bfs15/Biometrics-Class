@@ -21,6 +21,7 @@ import random
 from numba import jit
 
 from skimage.feature import hog
+import sklearn
 from skimage import data, exposure
 from sklearn import svm
 from sklearn import metrics
@@ -207,14 +208,12 @@ def extractFeaturesBackground(imagesFalse):
                 # cv2.imshow("win", window)
                 # cv2.waitKey(64)
                 features = windowHog(window)
-                
+
                 x_train.append(features)
-                y_train.append(-1)  # negative class
+                y_train.append(0)  # negative class
                 if(np.isnan(features).any()):
                     print("- warning: nan features")
-                    print("window.shape")
-                    print(window.shape)
-                    print(features)
+                    print(window.shape, features)
                     sys.stdout.flush()
 
     return x_train, y_train
@@ -229,7 +228,7 @@ def extractFeaturesTrue(imagesTrue):
         features = windowHog(image)
 
         x_train.append(features)
-        y_train.append(1)
+        y_train.append(1)  # positive class
 
         # cv2.imshow("image"+str(image_arg), image)
         # cv2.waitKey(64)
@@ -270,12 +269,11 @@ if __name__ == "__main__":
 
     clf = svm.SVC(C=100, gamma='auto')
 
-    # clf = sklearn.svm.OneClassSVM()
-    # clf.fit(x_train, y_train)
+    clf.fit(x_train, y_train)
 
     # cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
     # print(cv_results)
 
-    y_pred = model_selection.cross_val_predict(clf, x_train, y_train, cv=4)
-    conf_mat = metrics.confusion_matrix(y_train, y_pred)
-    print(conf_mat)
+    # y_pred = model_selection.cross_val_predict(clf, x_train, y_train, cv=4)
+    # conf_mat = metrics.confusion_matrix(y_train, y_pred)
+    # print(conf_mat)
