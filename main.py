@@ -257,8 +257,8 @@ if __name__ == "__main__":
     # list of lists of negative imgs
     imagesNegChunks = splitListN(list(imagesNeg), processorN)
 
-    with Pool(processorN) as p:
-        poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
+    p = Pool(processorN)
+    poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
     
     x_trainNeg, y_trainNeg = [], []
 
