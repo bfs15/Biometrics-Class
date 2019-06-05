@@ -1,6 +1,5 @@
 #! python2
 
-from multiprocessing import Pool
 import load
 # import enhance
 # import fingerprint
@@ -14,11 +13,13 @@ from matplotlib import pylab as plt
 import scipy
 import cv2
 import sys
+import os
 import matplotlib.cm
 import time
 import itertools
 import random
 
+import multiprocessing
 from numba import jit
 
 from skimage.feature import hog
@@ -28,10 +29,10 @@ from sklearn import svm
 from sklearn import metrics
 from sklearn import model_selection
 
-verbose = True
 classPos = 1
 classNeg = 0
 NMSThresh = 0.5
+processorN = 4
 
 
 def sobel_filter(img, axis):
@@ -207,8 +208,9 @@ def extractFeaturesNeg(imagesNeg):
     x_train = []
     y_train = []
     for image_arg, image in enumerate(imagesNeg):
+        image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         # skip some images for faster testing
-        if not image_arg % 12 == 0:
+        if not image_arg % 100 == 0:
             continue
         #
         image = np.array(image)
@@ -227,13 +229,14 @@ def extractFeaturesNeg(imagesNeg):
                     print(window.shape, features)
                     sys.stdout.flush()
 
-    return x_train, y_train
+    return np.array(x_train), np.array(y_train)
 
 
 def extractFeaturesPos(imagesPos):
     x_train = []
     y_train = []
     for image_arg, image in enumerate(imagesPos):
+        image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         image = np.array(image)
 
         features = windowHog(image)
@@ -245,7 +248,7 @@ def extractFeaturesPos(imagesPos):
         # cv2.waitKey(64)
         # cv2.destroyAllWindows()
         
-    return x_train, y_train
+    return np.array(x_train), np.array(y_train)
 
 
 # TODO: @jit(nopython=True)
@@ -338,78 +341,128 @@ def predictImage(clf, img):
     peopleBoxes = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
 
     return peopleBoxes
-        
+
+
+def tupleListToMultipleLists(tupleList):
+    """
+    Given a list in the format: [0:([x..],[y..]) ... N:([x..],[y..])]
+    returns concatenated list: x:[0: ..., ... , N: ...], y:[0: ..., ... , N: ...]
+    """
+    return map(np.concatenate, zip(*tupleList))
+
+
+def parallelListFunc(fun, itemList, isTupleList=False):
+    """
+    Processes function as if calling fun(itemList)
+    Divides itemList evenly across and calls fun in parallel
+    fun must have a list argument and return a list
+
+    isTupleList: if the returned list is a list of tuples
+    """
+    def splitListN(a, n):
+        k, m = divmod(len(a), n)
+        return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+    # Split items to process into chunks (evenly)
+    itemChunks = splitListN(itemList, multiprocessing.cpu_count())
+    # Create Pool with the number of procs detected
+    p = multiprocessing.Pool(multiprocessing.cpu_count())
+    # poolResult = [returnFun0, ... , returnFunProcNo]
+    poolResult = p.map(fun, itemChunks)
+    # Join pool into one list
+    # pool result 
+    if isTupleList:
+        return tupleListToMultipleLists(poolResult)
+    else:
+        return map(np.concatenate, poolResult)
+
+
+def loadFeats(pathFeats, classNo):
+    print("Reading class {} from disk...".format(classNo))
+    sys.stdout.flush()
+    x_train = np.load(pathFeats)
+    y_train = np.full(x_train.shape[0], classNo)
+    return x_train, y_train
 
 if __name__ == "__main__":
+    import argparse
+    ## Instantiate the parser
+    parser = argparse.ArgumentParser(
+    description='script description\n'
+    'python ' + __file__ + ' arg1 example usage',
+    formatter_class=argparse.RawTextHelpFormatter)
+    # arguments
+    parser.add_argument('-v','--verbose', action='store_true',
+                        help='verbose')
+    parser.add_argument('-nc', '--noCache', action='store_true',
+                        help='ignores cached data on disk')
+    ## Parse arguments
+    args = parser.parse_args()
+
     total_time = 0
-
-    imagesPos = load.database(
+    # load files
+    imagesPos = load.databaseFilenames(
         "/home/html/inf/menotti/ci1028-191/INRIAPerson/70X134H96/Test/pos")
-    imagesNeg = load.database("/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
-
+    imagesNeg = load.databaseFilenames("/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
+    # filepath variables
+    dirDB = "DB"
+    extNp = ".npy"
+    x_trainNegPath = dirDB + '/' + 'featsNegFile' + extNp
+    x_trainPosPath = dirDB + '/' + 'featsPosFile' + extNp
+    ### Read negative samples ###
     start_time = time.time()
+    # if cache file exists and no argument against
+    if os.path.isfile(x_trainNegPath) and not args.noCache:
+        # read features from disk
+        x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
+    else:
+        # extract features from images
+        ## Parallel ##
+        x_trainNeg, y_trainNeg = parallelListFunc(extractFeaturesNeg, list(imagesNeg), isTupleList=True)
+        ## Sequential ##
+        # x_trainNeg, y_trainNeg = extractFeaturesNeg(imagesNeg)
+        ##
+        # save features to disk for faster testing
+        np.save(x_trainNegPath, x_trainNeg)
 
-
-    # processorN = 4
-
-
-    # def splitListN(a, n):
-    #     k, m = divmod(len(a), n)
-    #     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
-        
-    # # list of lists of negative imgs
-    # imagesNegChunks = splitListN(list(imagesNeg), processorN)
-
-    # p = Pool(processorN)
-    # poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
-    
-    # x_trainNeg, y_trainNeg = [], []
-
-    # for result in poolResult:
-    #     x_trainNeg += result[0]
-    #     y_trainNeg += result[1]
-    
-    # print(len(x_trainNeg), len(y_trainNeg))
-
-    x_trainNeg, y_trainNeg = extractFeaturesNeg(imagesNeg)
-
-    print(len(x_trainNeg), len(y_trainNeg))
-
+    print("len(x_trainNeg)")
+    print(len(x_trainNeg))
 
     elapsed_time = time.time() - start_time
-    print("%.5f" % elapsed_time, 'HOG Neg')
+    print("%.5f" % elapsed_time, 'Feats Neg')
     total_time += elapsed_time
-    
-    negNo = len(x_trainNeg)
-
-    print("negNo")
-    print(negNo)
-
+    ### Read positive samples
     start_time = time.time()
-    
-    x_trainPos, y_trainPos = extractFeaturesPos(imagesPos)
+
+    if os.path.isfile(x_trainPosPath) and not args.noCache:
+        # read features from disk
+        x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
+    else:
+        # extract windows from the positive test folder
+        x_trainPos, y_trainPos = parallelListFunc(
+            extractFeaturesPos, list(imagesPos), isTupleList=True)
+        ## Sequential
+        # x_trainPos, y_trainPos = extractFeaturesPos(imagesPos)
+        ##
+        # save features to disk for faster testing
+        np.save(x_trainPosPath, x_trainPos)
 
     elapsed_time = time.time() - start_time
-    print(elapsed_time, 'HOG Pos')
+    print("%.5f" % elapsed_time, 'Feats Pos')
     total_time += elapsed_time
-
-    # TODO: test if turning into array impacts perf
-    x_train = np.array(x_trainNeg + x_trainPos)
-    y_train = np.array(y_trainNeg + y_trainPos)
-
+    # concatenate positive and negative data into the train set
+    x_train = np.concatenate([x_trainNeg, x_trainPos])
+    y_train = np.concatenate([y_trainNeg, y_trainPos])
+    ### Hard negative mining
     clf = svm.SVC(C=100, gamma='auto')
-
+    # first fit to all the postive data and random negative windows
     clf.fit(x_train, y_train)
-
+    # number of epochs of Hard Negative Mining
     epochN = 2
-
     # for each epoch of hard negative mining
     for epoch in range(epochN):
         # train with current set
         # readjust weights
-        # weights = {}
-        # weights[0] = 1 / (y_train == 0).sum()
-        # weights[1] = 1 / (y_train == 1).sum()
+        # weights = {0: 1 / (y_train == 0).sum(), 1: 1 / (y_train == 1).sum()}
         clf.set_params(class_weight='balanced')
         # if last epoch, train with probability enabled
         # to use Non Max Suppresion afterwards
@@ -425,6 +478,9 @@ if __name__ == "__main__":
                 img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
                 for win, _ in extractWindows(img):
                     winFeats = windowHog(win)
+                    print("winFeats", winFeats)
+                    print("winFeats", winFeats.shape)
+                    sys.stdout.flush()
                     y = clf.predict(win)
 
                     if y == classPos:
