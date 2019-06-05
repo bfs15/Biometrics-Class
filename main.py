@@ -1,5 +1,6 @@
 #! python2
 
+from multiprocessing import Pool
 import load
 # import enhance
 # import fingerprint
@@ -190,12 +191,12 @@ def extractWindowsRandom(image, windowNo=2, winSz=(128, 64)):
     
     for win_y, win_x in zip(wins_y, wins_x):
         yield image[win_y: win_y + winSz[0],  win_x: win_x + winSz[1]]
-            
 
-def extractFeaturesBackground(imagesFalse):
+
+def extractFeaturesNeg(imagesNeg):
     x_train = []
     y_train = []
-    for image_arg, image in enumerate(imagesFalse):
+    for image_arg, image in enumerate(imagesNeg):
         # skip some images for faster testing
         if not image_arg % 12 == 0:
             continue
@@ -219,10 +220,10 @@ def extractFeaturesBackground(imagesFalse):
     return x_train, y_train
 
 
-def extractFeaturesTrue(imagesTrue):
+def extractFeaturesPos(imagesPos):
     x_train = []
     y_train = []
-    for image_arg, image in enumerate(imagesTrue):
+    for image_arg, image in enumerate(imagesPos):
         image = np.array(image)
 
         features = windowHog(image)
@@ -239,33 +240,58 @@ def extractFeaturesTrue(imagesTrue):
 if __name__ == "__main__":
     total_time = 0
 
-    imagesTrue = load.database(
+    imagesPos = load.database(
         "/home/html/inf/menotti/ci1028-191/INRIAPerson/70X134H96/Test/pos")
-    imagesFalse = load.database("/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
+    imagesNeg = load.database("/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
 
     start_time = time.time()
 
-    x_trainFalse, y_trainFalse = extractFeaturesBackground(imagesFalse)
+
+    processorN = 4
+
+
+    def splitListN(a, n):
+        k, m = divmod(len(a), n)
+        return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+        
+    # list of lists of negative imgs
+    imagesNegChunks = splitListN(list(imagesNeg), processorN)
+
+    with Pool(processorN) as p:
+        poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
+    
+    x_trainNeg, y_trainNeg = [], []
+
+    for result in poolResult:
+        x_trainNeg += result[0]
+        y_trainNeg += result[1]
+    
+    print(len(x_trainNeg), len(y_trainNeg))
+
+    x_trainNeg, y_trainNeg = extractFeaturesNeg(imagesNeg)
+
+    print(len(x_trainNeg), len(y_trainNeg))
+
 
     elapsed_time = time.time() - start_time
-    print("%.5f" % elapsed_time, 'HOG False')
+    print("%.5f" % elapsed_time, 'HOG Neg')
     total_time += elapsed_time
     
-    falseNo = len(x_trainFalse)
+    negNo = len(x_trainNeg)
 
-    print("falseNo")
-    print(falseNo)
+    print("negNo")
+    print(negNo)
 
     start_time = time.time()
     
-    x_trainTrue, y_trainTrue = extractFeaturesTrue(imagesTrue)
+    x_trainPos, y_trainPos = extractFeaturesPos(imagesPos)
 
     elapsed_time = time.time() - start_time
-    print(elapsed_time, 'HOG True')
+    print(elapsed_time, 'HOG Pos')
     total_time += elapsed_time
 
-    x_train = x_trainFalse + x_trainTrue
-    y_train = y_trainFalse + y_trainTrue
+    x_train = x_trainNeg + x_trainPos
+    y_train = y_trainNeg + y_trainPos
 
     clf = svm.SVC(C=100, gamma='auto')
 
