@@ -11,3 +11,10 @@ def database(path_in, filetypeExt_in="png"):
         image = cv2.imread(pathFilename, cv2.IMREAD_GRAYSCALE)
 
         yield image
+
+
+def databaseFilenames(path_in, filetypeExt_in="png"):
+    images = []
+
+    for pathFilename in sorted(glob.iglob(os.path.join(path_in, "*." + filetypeExt_in))):
+        yield pathFilename
