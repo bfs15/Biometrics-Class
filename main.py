@@ -247,26 +247,26 @@ if __name__ == "__main__":
     start_time = time.time()
 
 
-    processorN = 4
+    # processorN = 4
 
 
-    def splitListN(a, n):
-        k, m = divmod(len(a), n)
-        return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+    # def splitListN(a, n):
+    #     k, m = divmod(len(a), n)
+    #     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
         
-    # list of lists of negative imgs
-    imagesNegChunks = splitListN(list(imagesNeg), processorN)
+    # # list of lists of negative imgs
+    # imagesNegChunks = splitListN(list(imagesNeg), processorN)
 
-    p = Pool(processorN)
-    poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
+    # p = Pool(processorN)
+    # poolResult = p.map(extractFeaturesNeg, imagesNegChunks)
     
-    x_trainNeg, y_trainNeg = [], []
+    # x_trainNeg, y_trainNeg = [], []
 
-    for result in poolResult:
-        x_trainNeg += result[0]
-        y_trainNeg += result[1]
+    # for result in poolResult:
+    #     x_trainNeg += result[0]
+    #     y_trainNeg += result[1]
     
-    print(len(x_trainNeg), len(y_trainNeg))
+    # print(len(x_trainNeg), len(y_trainNeg))
 
     x_trainNeg, y_trainNeg = extractFeaturesNeg(imagesNeg)
 
