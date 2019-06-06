@@ -1,4 +1,5 @@
 #! python2
+from __future__ import print_function
 
 import load
 # import enhance
@@ -145,13 +146,13 @@ def windowHog(image, blkSz=2, stride=1, cellSz=8, binSz=9):
     mag, angle = gradient(image)
     bins = GradientHistogram(mag, angle, cellSz, binSz)
     binsNorm = normalizeHistogram(bins, blkSz, stride)
-
+    ## To display gradient to user ##
     # fd, hog_image = skimage.feature.hog(image, orientations=8, pixels_per_cell=(cellSz, cellSz), cells_per_block=(blkSz, blkSz), block_norm='L2', visualise=True)
     # # show resulting image
     # hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 10))
     # cv2.imshow("hog_image", hog_image_rescaled)
     # cv2.waitKey()
-
+    ## cv2 style gradient ##
     # winSize = (64, 128)
     # blockSize = (blkSz*cellSz, blkSz*cellSz)
     # blockStride = (8, 8)
@@ -210,7 +211,7 @@ def extractFeaturesNeg(imagesNeg):
     for image_arg, image in enumerate(imagesNeg):
         image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         # skip some images for faster testing
-        if not image_arg % 6 == 0:
+        if not image_arg % 12 == 0:
             continue
 
         image = np.array(image)
@@ -305,6 +306,10 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 
 
 def predictImage(clf, img):
+    """
+    Given classifier and image, returns a array of bounding boxes (boxesNo,4)
+    boxesPred = predictImage(clf, img)
+    """
     # array of probability of predictions for windows
     peopleProb = []
     # array of the position of windows
@@ -324,8 +329,8 @@ def predictImage(clf, img):
         winScale = 1/(1+scale*argLvl)
         for win, winBoxLvl in extractWindows(imgLvl):
             winFeats = windowHog(win)
-            pred = clf.predict_proba(winFeats)
-            peopleProb.append(pred[classPos])
+            pred = clf.predict_proba([winFeats])
+            peopleProb.append(pred[0][classPos])
             # from the box in this pyrLvl, get the real widow
             winBox = winBoxLvl * winScale
             peopleWin.append(winBox)
@@ -416,9 +421,9 @@ def tupleListToMultipleLists(tupleList):
     return map(np.concatenate, zip(*tupleList))
 
 
-def parallelListFunc(fun, itemList, isTupleList=False):
+def parallelListFunc(fun, itemList, isTupleList=False, *argv):
     """
-    Processes function as if calling fun(itemList)
+    Processes function as if calling fun(itemList, *argv)
     Divides itemList evenly across and calls fun in parallel
     fun must have a list argument and return a list
 
@@ -432,7 +437,49 @@ def parallelListFunc(fun, itemList, isTupleList=False):
     # Create Pool with the number of procs detected
     p = multiprocessing.Pool(multiprocessing.cpu_count())
     # poolResult = [returnFun0, ... , returnFunProcNo]
-    poolResult = p.map(fun, itemChunks)
+    poolResult = p.map(fun, itemChunks, *argv)
+    # Join pool into one list
+    # pool result
+    if isTupleList:
+        return tupleListToMultipleLists(poolResult)
+    else:
+        return map(np.concatenate, poolResult)
+
+
+def parallelListFuncArgv(fun, itemList, isTupleList=False, *argv):
+    """
+    Processes function as if calling fun(itemList, *argv), you will need to make an unpacker
+    Divides itemList evenly across and calls fun in parallel
+    fun must have a list argument and return a list
+
+    isTupleList: if the returned list is a list of tuples
+    """
+    def splitListN(a, n):
+        k, m = divmod(len(a), n)
+        return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
+    # Split items to process into chunks (evenly)
+    itemChunks = list(splitListN(itemList, multiprocessing.cpu_count()))
+    # Create Pool with the number of procs detected
+    p = multiprocessing.Pool(multiprocessing.cpu_count())
+    # function unpacker, since p.map accepts only 1 argument
+    def funUnpack(args):
+        print(args)
+        # fun = args[0]
+        print(*args)
+        # print('ar', args[1:])
+        return np.array([1]), np.array([2])
+        # return fun(*args)
+    # poolResult = [returnFun0, ... , returnFunProcNo]
+    arguments = []
+    for idx in range(multiprocessing.cpu_count()):
+        arguments.append([fun, itemChunks[idx]])
+        for arg in argv:
+            arguments[idx].append(arg)
+    print("len(itemChunks)")
+    print(len(itemChunks))
+    print("len(arguments)")
+    print(len(arguments))
+    poolResult = p.map(funUnpack, arguments)
     # Join pool into one list
     # pool result
     if isTupleList:
@@ -465,10 +512,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # load files
-    imagesPos = load.databaseFilenames(
-        "/home/html/inf/menotti/ci1028-191/INRIAPerson/70X134H96/Test/pos")
-    imagesNeg = load.databaseFilenames(
-        "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
+    dbTrainPos = "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train"
+    dbTrainPos = "/home/html/inf/menotti/ci1028-191/INRIAPerson/70X134H96/Test/pos"
+    dbTrainNeg = "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg"
+    dbTest = "/home/html/inf/menotti/ci1028-191/INRIAPerson/Test"
+    dbTestPos = "/home/html/inf/menotti/ci1028-191/INRIAPerson/Test/pos"
+    dbTestNeg = "/home/html/inf/menotti/ci1028-191/INRIAPerson/Test/neg"
+
+    imagesPos = load.databaseFilenames(dbTestPos)
+    imagesNeg = load.databaseFilenames(dbTestNeg)
     # filepath variables
     dirDB = "DB"
     extNp = ".npy"
@@ -550,32 +602,44 @@ if __name__ == "__main__":
             # if last epoch, no need to hardmine
             break
 
-        def getNegHard(clf, imagesNeg):
+        def getNegHard(imagesNeg, clf, featsLimitNo):
             """
             Given classifier, returns hard negatives from an image set
             clf: classifier
             imagesNeg: images with only negative conditions
+            return negHardX(featsLimitNo, featuresDimension), negHardY(featsLimitNo,)
             """
-            negHard = []
+            negHardX = None
             # slide through images to find hard negatives (false positives)
             for imgIdx, pathImg in enumerate(imagesNeg):
                 img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
                 img = np.array(img)
+                # list of dimensions (windows, features)
+                winFeats = []
                 # for imgLvl in pyramidCreate(img, 4, 3, 0.1):
-                for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+                for imgLvl in pyramidCreate(img):
                     # skip some images for faster testing
                     # if not imgIdx % 100 == 0:
                     #     continue
                     #
-                    for win in extractWindowsRandom(imgLvl, 1):
-                        winFeats = windowHog(win)
-                        y = clf.predict([winFeats])
-
-                        if y == classPos:
-                            # false positive
-                            negHard.append(winFeats)
-            negHard = np.array(negHard)
-            return negHard, np.full(negHard.shape[0], classNeg)
+                    for win in extractWindowsRandom(imgLvl, 99):
+                        winFeat = windowHog(win)
+                        winFeats.append(winFeat)
+                # predict windows extracted from image
+                y = clf.predict(winFeats)
+                # select windows which are false positievs
+                winFeats = np.array(winFeats)
+                falsePos = winFeats[np.where(y == classPos)]
+                try:
+                    negHardX = np.concatenate([negHardX, falsePos])
+                except ValueError as err:
+                    # zero-dimensional arrays cannot be concatenated
+                    negHardX = falsePos
+                # if we have enough features, break out of loop
+                if negHardX.shape[0] > featsLimitNo:
+                    break
+            negHardY = np.full(negHardX.shape[0], classNeg)
+            return negHardX, negHardY
         # use classifier on the test set to find hard negatives
         imagesNeg = load.databaseFilenames(
             "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
@@ -586,16 +650,31 @@ if __name__ == "__main__":
             return dest
         imagesNeg = scrambled(list(imagesNeg))
         # get hard negatives
-        x_trainNegHard, y_trainNegHard = getNegHard(clf, imagesNeg)
+        print("trying to get hard negatives:", x_train.shape[0])
+        x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
+            imagesNeg, True, clf, x_train.shape[0] / multiprocessing.cpu_count())
+        # x_trainNegHard, y_trainNegHard = getNegHard(
+        #     imagesNeg, clf, x_train.shape[0])
         # add hard negatives on the training set
-        print("hard negatives no:", y_trainNegHard.size)
-        print(x_trainNegHard.shape)
+        print("hard negatives no:", x_trainNegHard.shape)
         x_train = np.concatenate([x_train, x_trainNegHard])
         y_train = np.concatenate([y_train, y_trainNegHard])
 
         elapsed_time = time.time() - start_time
         print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
         sys.stdout.flush()
+
+    imagesTestPos = load.database(dbTestPos)
+
+    for img in imagesTestPos:
+        boxesPred = predictImage(clf, img)
+        for box in boxesPred:
+            print(box[:2], box[2:])
+            cv2.rectangle(img, box[:2], box[2:], (0, 255, 0), 3)
+
+        cv2.imshow("boxes", img)
+        cv2.waitKey(100)
+        
 
     # cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
     # print(cv_results)
