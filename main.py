@@ -22,7 +22,7 @@ import random
 import multiprocessing
 from numba import jit
 
-from skimage.feature import hog
+import skimage.feature
 import sklearn
 from skimage import data, exposure
 from sklearn import svm
@@ -42,7 +42,7 @@ def sobel_filter(img, axis):
     ]
 
     convolved = scipy.signal.convolve2d(
-                img, kernel[axis], mode='same', boundary='symm')
+        img, kernel[axis], mode='same', boundary='symm')
 
     return convolved
 
@@ -106,57 +106,57 @@ def GradientHistogram(mag, angle, cellSz=8, binSz=9):
                 hist[(index+1) % binSz] = (weight)*magEl
 
             # hist, bin_edges = np.histogram(cellAngle, bins=binSz, range=(0, 180), normed=None, weights=cellMag, density=None)
-            
+
             bins[bins_y, bins_x] = hist
-    
+
     return bins
 
-# TODO: @jit(nopython=True)
+
+@jit(nopython=True)
 def normalizeHistogram(bins, blkSz=2, stride=1, eps=1e-6):
     """
     bins : shape (imgHeight//cellSz, imgHeight//cellSz, histogramSize)
     blkSz : block size in cells, a block will be a square of (blkSz x blkSz) cells
     stride : stride in cells, ex: blkSz=2 stride=1 has an overlap of 50%
     """
-    binsNormShape = ((bins.shape[0] - blkSz+1)//stride, (bins.shape[1] - blkSz+1)//stride, bins.shape[-1]*(blkSz**2))
+    binsNormShape = ((bins.shape[0] - blkSz+1)//stride,
+                     (bins.shape[1] - blkSz+1)//stride, bins.shape[-1]*(blkSz**2))
     binsNorm = np.empty(binsNormShape)
 
     for bins_y in range(binsNorm.shape[0]):
         for bins_x in range(binsNorm.shape[1]):
             block = bins[(bins_y*stride): (bins_y*stride) + blkSz,
-                                     (bins_x*stride): (bins_x*stride) + blkSz]
-            
+                         (bins_x*stride): (bins_x*stride) + blkSz]
+
             blockFlat = block.flatten()
             L2Norm = np.linalg.norm(blockFlat) + eps
             binsNorm[bins_y, bins_x] = blockFlat / L2Norm
-            # TODO: remove this?
-            if(np.isnan(binsNorm[bins_y, bins_x]).any()):
-                binsNorm[bins_y, bins_x] = np.zeros(binsNormShape)
+            # if(np.isnan(binsNorm[bins_y, bins_x]).any()):
+            #     binsNorm[bins_y, bins_x] = np.zeros(binsNormShape)
 
     return binsNorm
 
 
-def windowHog(image):
+def windowHog(image, blkSz=2, stride=1, cellSz=8, binSz=9):
     """
     image : image window
     return feature vector of the window
     """
     mag, angle = gradient(image)
-    bins = GradientHistogram(mag, angle)
-    binsNorm = normalizeHistogram(bins)
+    bins = GradientHistogram(mag, angle, cellSz, binSz)
+    binsNorm = normalizeHistogram(bins, blkSz, stride)
 
-    # fd, hog_image = hog(image, orientations=8, pixels_per_cell=(8, 8), cells_per_block=(2, 2), block_norm='L2', visualise=True)
-
+    # fd, hog_image = skimage.feature.hog(image, orientations=8, pixels_per_cell=(cellSz, cellSz), cells_per_block=(blkSz, blkSz), block_norm='L2', visualise=True)
+    # # show resulting image
     # hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 10))
-    # cv2.imshow("hog_image"+str(image_arg), hog_image_rescaled)
+    # cv2.imshow("hog_image", hog_image_rescaled)
+    # cv2.waitKey()
 
     # winSize = (64, 128)
-    # blockSize = (16, 16)
+    # blockSize = (blkSz*cellSz, blkSz*cellSz)
     # blockStride = (8, 8)
-    # cellSize = (8, 8)
-    # nbins = 9
-    # hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize, nbins)
-
+    # cellSize = (cellSz, cellSz)
+    # hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize, binSz)
     # winStride = (8, 8)
     # padding = (8, 8)
     # hist = hog.compute(image, winStride, padding)
@@ -181,7 +181,7 @@ def extractWindows(image, stride=8, winSz=(128, 64)):
 def extractWindowsRandom(image, windowNo=2, winSz=(128, 64)):
     image = cv2.copyMakeBorder(
         image, winSz[0]//4, winSz[0]//4, winSz[1]//4, winSz[1]//4, cv2.BORDER_REPLICATE)
-    
+
     start_y = random.randint(0, winSz[0]//4)
     start_x = random.randint(0, winSz[1]//4)
     all_y = range(start_y, image.shape[0]-winSz[0], winSz[0])
@@ -199,7 +199,7 @@ def extractWindowsRandom(image, windowNo=2, winSz=(128, 64)):
                 # decrease sample
                 print("sample larger than population")
                 windowNo -= 1
-    
+
     for win_y, win_x in zip(wins_y, wins_x):
         yield image[win_y: win_y + winSz[0],  win_x: win_x + winSz[1]]
 
@@ -210,26 +210,22 @@ def extractFeaturesNeg(imagesNeg):
     for image_arg, image in enumerate(imagesNeg):
         image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         # skip some images for faster testing
-        if not image_arg % 100 == 0:
+        if not image_arg % 6 == 0:
             continue
-        #
+
         image = np.array(image)
         # for imageLevel in pyramidCreate(image, 4, 3, 0.1):
         for imageLevel in pyramidCreate(image):
-            for window in extractWindowsRandom(imageLevel):
+            for window in extractWindowsRandom(imageLevel, 1):
                 # show extracted window
                 # cv2.imshow("win", window)
                 # cv2.waitKey(64)
                 features = windowHog(window)
-
                 x_train.append(features)
-                y_train.append(classNeg)  # negative class
-                if(np.isnan(features).any()):
-                    print("- warning: nan features")
-                    print(window.shape, features)
-                    sys.stdout.flush()
-
-    return np.array(x_train), np.array(y_train)
+    # class label array
+    x_train = np.array(x_train)
+    y_train = np.full(x_train.shape[0], classNeg)
+    return x_train, y_train
 
 
 def extractFeaturesPos(imagesPos):
@@ -238,25 +234,24 @@ def extractFeaturesPos(imagesPos):
     for image_arg, image in enumerate(imagesPos):
         image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
         image = np.array(image)
-
         features = windowHog(image)
-
         x_train.append(features)
-        y_train.append(classPos)  # positive class
 
         # cv2.imshow("image"+str(image_arg), image)
         # cv2.waitKey(64)
         # cv2.destroyAllWindows()
-        
-    return np.array(x_train), np.array(y_train)
+    # class label array
+    x_train = np.array(x_train)
+    y_train = np.full(x_train.shape[0], classNeg)
+    return x_train, y_train
 
 
-# TODO: @jit(nopython=True)
+# TODO: @jit(nopython=True)probas
 def nonMaxSuppresion(boxes, probas, overlapThresh):
     """
     boxes: 2darray of shape (n, 4) / n is the number of boxes
     probas: 1darray of shape (n), each element is the probability of the corresponding box
-    overlapThresh: if boxes exeed this threshold of overlap with the maximum box, it is suppressed
+    overlapThresh: if boxes exceed this threshold of overlap with the maximum box, it is suppressed
     """
     if len(boxes) == 0:
         # no boxes, return an empty list
@@ -308,6 +303,7 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
     # return boxes from max box idxs
     return boxes[maxBoxIdxs]
 
+
 def predictImage(clf, img):
     # array of probability of predictions for windows
     peopleProb = []
@@ -329,18 +325,87 @@ def predictImage(clf, img):
         for win, winBoxLvl in extractWindows(imgLvl):
             winFeats = windowHog(win)
             pred = clf.predict_proba(winFeats)
-            if pred[classNeg] > pred[classPos]:
-                # negative
-                continue
             peopleProb.append(pred[classPos])
             # from the box in this pyrLvl, get the real widow
             winBox = winBoxLvl * winScale
             peopleWin.append(winBox)
-    
+
     # non maximum suppresion
     peopleBoxes = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
 
     return peopleBoxes
+
+
+def compareBoxes(boxesTrue, boxesPred, overlapThresh):
+    """
+    boxesTrue: true boxes
+    boxesPred: predicted boxes
+    # boxes: 2darray of shape (n, 4) / n is the number of boxes
+    overlapThresh: if boxes exceed this threshold of overlap, it is considered the same box
+    """
+    if len(boxes) == 0:
+        # no boxes, return an empty list
+        return []
+    # if the bounding boxes are integers
+    # convert them to floats, float division is faster
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+    # list of max boxes indexes
+    maxBoxIdxs = []
+    # coordinates of the bounding boxes
+    begY = 0
+    begX = 1
+    endY = 2
+    endX = 3
+    trueBegY = boxesTrue[:, begY]
+    trueBegX = boxesTrue[:, begX]
+    trueEndY = boxesTrue[:, endY]
+    trueEndX = boxesTrue[:, endX]
+    # area of the bounding boxes
+    area = (trueEndY - trueBegY + 1) * (trueEndX - trueBegX + 1)
+    # sort boxes by the probabilities
+    argProbas = np.argsort(probas)
+    # loop removing boxes from the idx list, until no boxes remain
+    for idx in reversed(range(boxesTrue.size)):
+        # calculate overlap:
+        # get bot-rightmost beginning (x, y) coordinates of both the boxes
+        # and the top-leftmost ending (x, y) coordinates of both the boxes
+        # the area of overlap is the area of the box of those coordinates
+        # use np.maximum to calculate overlap for every box, is the same as:
+        # max(begY[idxMax] - begY[idx]) for idx in argProbas[:-1] (every box except the max one)
+        overlBegX = np.maximum(trueBegY[idx], boxesPred[:, begY])
+        overlBegY = np.maximum(trueBegX[idx], boxesPred[:, begX])
+        overlEndX = np.minimum(trueEndY[idx], boxesPred[:, endY])
+        overlEndY = np.minimum(trueEndX[idx], boxesPred[:, endX])
+        # width and height of the overlap box
+        # the normal calculation (end-beg+1) can be negative in the cases boxes don't overlap
+        overlH = np.maximum(0, overlEndY - overlBegY + 1)
+        overlW = np.maximum(0, overlEndX - overlBegX + 1)
+        # overlap ratio
+        overlArea = overlH * overlW
+        overlRatio = (overlArea) / area[idx]
+        # true positive if the box with most overlap is over threshold
+        idxMaxOverl = np.argmax(overlRatio)
+        if overlRatio[idxMaxOverl] > overlapThresh:
+            # a predicted box overlaps with this true one
+            truePos += 1
+            # delete the box registered
+            boxesPred = np.delete(boxesPred, [idxMaxOverl], axis=0)
+        else:
+            # no predicted box overlaps with this true one
+            falseNeg += 1
+    # missRate =  falseNegative / conditionPositive
+    boxesTrueNo = boxesTrue.shape[0]
+    missRate = falseNeg / boxesTrueNo
+    # false positives = number of boxes not paired with any true one (remaining)
+    falsePosNo = boxesPred.shape[0]
+    # return stats
+    return missRate, falsePosNo
+
+
+def statsImage(clf, img, boxesTrue):
+    boxesPred = predictImage(clf, img)
+    missRate, falsePos = compareBoxes(boxesTrue, boxesPred)
 
 
 def tupleListToMultipleLists(tupleList):
@@ -369,7 +434,7 @@ def parallelListFunc(fun, itemList, isTupleList=False):
     # poolResult = [returnFun0, ... , returnFunProcNo]
     poolResult = p.map(fun, itemChunks)
     # Join pool into one list
-    # pool result 
+    # pool result
     if isTupleList:
         return tupleListToMultipleLists(poolResult)
     else:
@@ -383,26 +448,27 @@ def loadFeats(pathFeats, classNo):
     y_train = np.full(x_train.shape[0], classNo)
     return x_train, y_train
 
+
 if __name__ == "__main__":
     import argparse
     ## Instantiate the parser
     parser = argparse.ArgumentParser(
-    description='script description\n'
-    'python ' + __file__ + ' arg1 example usage',
-    formatter_class=argparse.RawTextHelpFormatter)
+        description='script description\n'
+        'python ' + __file__ + ' arg1 example usage',
+        formatter_class=argparse.RawTextHelpFormatter)
     # arguments
-    parser.add_argument('-v','--verbose', action='store_true',
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help='verbose')
     parser.add_argument('-nc', '--noCache', action='store_true',
                         help='ignores cached data on disk')
     ## Parse arguments
     args = parser.parse_args()
 
-    total_time = 0
     # load files
     imagesPos = load.databaseFilenames(
         "/home/html/inf/menotti/ci1028-191/INRIAPerson/70X134H96/Test/pos")
-    imagesNeg = load.databaseFilenames("/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
+    imagesNeg = load.databaseFilenames(
+        "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
     # filepath variables
     dirDB = "DB"
     extNp = ".npy"
@@ -417,9 +483,10 @@ if __name__ == "__main__":
     else:
         # extract features from images
         ## Parallel ##
-        x_trainNeg, y_trainNeg = parallelListFunc(extractFeaturesNeg, list(imagesNeg), isTupleList=True)
+        x_trainNeg, y_trainNeg = parallelListFunc(
+            extractFeaturesNeg, list(imagesNeg), isTupleList=True)
         ## Sequential ##
-        # x_trainNeg, y_trainNeg = extractFeaturesNeg(imagesNeg)
+        # x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imagesNeg))
         ##
         # save features to disk for faster testing
         np.save(x_trainNegPath, x_trainNeg)
@@ -429,7 +496,6 @@ if __name__ == "__main__":
 
     elapsed_time = time.time() - start_time
     print("%.5f" % elapsed_time, 'Feats Neg')
-    total_time += elapsed_time
     ### Read positive samples
     start_time = time.time()
 
@@ -448,22 +514,24 @@ if __name__ == "__main__":
 
     elapsed_time = time.time() - start_time
     print("%.5f" % elapsed_time, 'Feats Pos')
-    total_time += elapsed_time
     # concatenate positive and negative data into the train set
     x_train = np.concatenate([x_trainNeg, x_trainPos])
     y_train = np.concatenate([y_trainNeg, y_trainPos])
     ### Hard negative mining
-    clf = svm.SVC(C=100, gamma='auto')
+    # clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
+    clf = svm.SVC(C=100, gamma='auto', class_weight='balanced')
     # first fit to all the postive data and random negative windows
-    clf.fit(x_train, y_train)
+    # clf.fit(x_train, y_train)
     # number of epochs of Hard Negative Mining
     epochN = 2
     # for each epoch of hard negative mining
     for epoch in range(epochN):
-        # train with current set
-        # readjust weights
-        # weights = {0: 1 / (y_train == 0).sum(), 1: 1 / (y_train == 1).sum()}
-        clf.set_params(class_weight='balanced')
+        ### Fit classifier to current set
+        start_time = time.time()
+
+        print("epoch: ", epoch)
+        sys.stdout.flush()
+        ## train with current set
         # if last epoch, train with probability enabled
         # to use Non Max Suppresion afterwards
         if epoch == epochN-1:
@@ -471,43 +539,63 @@ if __name__ == "__main__":
 
         clf.fit(x_train, y_train)
 
+        elapsed_time = time.time() - start_time
+        print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
+        sys.stdout.flush()
+
+        ### Get hard examples
+        start_time = time.time()
+
+        if epoch == epochN-1:
+            # if last epoch, no need to hardmine
+            break
+
         def getNegHard(clf, imagesNeg):
+            """
+            Given classifier, returns hard negatives from an image set
+            clf: classifier
+            imagesNeg: images with only negative conditions
+            """
             negHard = []
             # slide through images to find hard negatives (false positives)
-            for pathImg in imagesNeg:
+            for imgIdx, pathImg in enumerate(imagesNeg):
                 img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
-                for win, _ in extractWindows(img):
-                    winFeats = windowHog(win)
-                    print("winFeats", winFeats)
-                    print("winFeats", winFeats.shape)
-                    sys.stdout.flush()
-                    y = clf.predict(win)
+                img = np.array(img)
+                # for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+                for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+                    # skip some images for faster testing
+                    # if not imgIdx % 100 == 0:
+                    #     continue
+                    #
+                    for win in extractWindowsRandom(imgLvl, 1):
+                        winFeats = windowHog(win)
+                        y = clf.predict([winFeats])
 
-                    if y == classPos:
-                        # false positive
-                        negHard.append(win)
-
-            return negHard, []
-
-        # test classifier with sliding window
-        # on the test set to find hard negatives
-        # TODO: test which is faster
-        # imagesNeg = load.database(
-        #     "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
-        #
+                        if y == classPos:
+                            # false positive
+                            negHard.append(winFeats)
+            negHard = np.array(negHard)
+            return negHard, np.full(negHard.shape[0], classNeg)
+        # use classifier on the test set to find hard negatives
         imagesNeg = load.databaseFilenames(
             "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
-        #
+        # scramble background input
         def scrambled(orig):
             dest = orig[:]
             random.shuffle(dest)
             return dest
         imagesNeg = scrambled(list(imagesNeg))
+        # get hard negatives
         x_trainNegHard, y_trainNegHard = getNegHard(clf, imagesNeg)
         # add hard negatives on the training set
-        x_train += x_trainNegHard
-        y_train += y_trainNegHard
+        print("hard negatives no:", y_trainNegHard.size)
+        print(x_trainNegHard.shape)
+        x_train = np.concatenate([x_train, x_trainNegHard])
+        y_train = np.concatenate([y_train, y_trainNegHard])
 
+        elapsed_time = time.time() - start_time
+        print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
+        sys.stdout.flush()
 
     # cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
     # print(cv_results)
