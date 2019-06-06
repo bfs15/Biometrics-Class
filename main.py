@@ -446,6 +446,14 @@ def parallelListFunc(fun, itemList, isTupleList=False, *argv):
         return map(np.concatenate, poolResult)
 
 
+def funUnpack(args):
+    print(args)
+    # fun = args[0]
+    print(*args)
+    # print('ar', args[1:])
+    return np.array([1]), np.array([2])
+
+
 def parallelListFuncArgv(fun, itemList, isTupleList=False, *argv):
     """
     Processes function as if calling fun(itemList, *argv), you will need to make an unpacker
@@ -462,12 +470,6 @@ def parallelListFuncArgv(fun, itemList, isTupleList=False, *argv):
     # Create Pool with the number of procs detected
     p = multiprocessing.Pool(multiprocessing.cpu_count())
     # function unpacker, since p.map accepts only 1 argument
-    def funUnpack(args):
-        print(args)
-        # fun = args[0]
-        print(*args)
-        # print('ar', args[1:])
-        return np.array([1]), np.array([2])
         # return fun(*args)
     # poolResult = [returnFun0, ... , returnFunProcNo]
     arguments = []
