@@ -496,6 +496,46 @@ def loadFeats(pathFeats, classNo):
     return x_train, y_train
 
 
+def getNegHard(imagesNeg, clf, featsLimitNo):
+    """
+    Given classifier, returns hard negatives from an image set
+    clf: classifier
+    imagesNeg: images with only negative conditions
+    return negHardX(featsLimitNo, featuresDimension), negHardY(featsLimitNo,)
+    """
+    negHardX = None
+    # slide through images to find hard negatives (false positives)
+    for imgIdx, pathImg in enumerate(imagesNeg):
+        img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
+        img = np.array(img)
+        # list of dimensions (windows, features)
+        winFeats = []
+        # for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+        for imgLvl in pyramidCreate(img):
+            # skip some images for faster testing
+            # if not imgIdx % 100 == 0:
+            #     continue
+            #
+            for win in extractWindowsRandom(imgLvl, 99):
+                winFeat = windowHog(win)
+                winFeats.append(winFeat)
+        # predict windows extracted from image
+        y = clf.predict(winFeats)
+        # select windows which are false positievs
+        winFeats = np.array(winFeats)
+        falsePos = winFeats[np.where(y == classPos)]
+        try:
+            negHardX = np.concatenate([negHardX, falsePos])
+        except ValueError as err:
+            # zero-dimensional arrays cannot be concatenated
+            negHardX = falsePos
+        # if we have enough features, break out of loop
+        if negHardX.shape[0] > featsLimitNo:
+            break
+    negHardY = np.full(negHardX.shape[0], classNeg)
+    return negHardX, negHardY
+
+
 if __name__ == "__main__":
     import argparse
     ## Instantiate the parser
@@ -594,52 +634,12 @@ if __name__ == "__main__":
         elapsed_time = time.time() - start_time
         print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
         sys.stdout.flush()
-
         ### Get hard examples
         start_time = time.time()
 
         if epoch == epochN-1:
             # if last epoch, no need to hardmine
             break
-
-        def getNegHard(imagesNeg, clf, featsLimitNo):
-            """
-            Given classifier, returns hard negatives from an image set
-            clf: classifier
-            imagesNeg: images with only negative conditions
-            return negHardX(featsLimitNo, featuresDimension), negHardY(featsLimitNo,)
-            """
-            negHardX = None
-            # slide through images to find hard negatives (false positives)
-            for imgIdx, pathImg in enumerate(imagesNeg):
-                img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
-                img = np.array(img)
-                # list of dimensions (windows, features)
-                winFeats = []
-                # for imgLvl in pyramidCreate(img, 4, 3, 0.1):
-                for imgLvl in pyramidCreate(img):
-                    # skip some images for faster testing
-                    # if not imgIdx % 100 == 0:
-                    #     continue
-                    #
-                    for win in extractWindowsRandom(imgLvl, 99):
-                        winFeat = windowHog(win)
-                        winFeats.append(winFeat)
-                # predict windows extracted from image
-                y = clf.predict(winFeats)
-                # select windows which are false positievs
-                winFeats = np.array(winFeats)
-                falsePos = winFeats[np.where(y == classPos)]
-                try:
-                    negHardX = np.concatenate([negHardX, falsePos])
-                except ValueError as err:
-                    # zero-dimensional arrays cannot be concatenated
-                    negHardX = falsePos
-                # if we have enough features, break out of loop
-                if negHardX.shape[0] > featsLimitNo:
-                    break
-            negHardY = np.full(negHardX.shape[0], classNeg)
-            return negHardX, negHardY
         # use classifier on the test set to find hard negatives
         imagesNeg = load.databaseFilenames(
             "/home/html/inf/menotti/ci1028-191/INRIAPerson/Train/neg/")
