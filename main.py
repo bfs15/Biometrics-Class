@@ -309,7 +309,7 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 		argProbas = np.delete(argProbas, idxsDelete)
 
 	# return boxes from max box idxs
-	return boxes[maxBoxIdxs], maxBoxProbas
+	return boxes[maxBoxIdxs].astype("int32"), maxBoxProbas
 
 
 def nonMaxSuppresionTest():
@@ -340,6 +340,7 @@ def predictImage(clf, img):
 	lvlsDown = 6
 	scale = 0.05
 	lvl = 2
+	imgFeats = []
 	for argLvl, imgLvl in enumerate(pyramidCreate(img)):
 		if argLvl > lvlsUp:
 			# negative levels, down in the pyramid
@@ -353,17 +354,23 @@ def predictImage(clf, img):
 		winScale = 1/(1+scale*argLvl)
 		for win, winBoxLvl in extractWindows(imgLvl):
 			winFeats = windowHog(win)
-			pred = clf.predict_proba([winFeats])
-			if pred[0][classPos] > 0.5:
-				peopleProb.append(pred[0][classPos])
-				# from the box in this pyrLvl, get the real widow
-				winBox = winBoxLvl * winScale
-				peopleWin.append(winBox)
+			imgFeats.append(winFeats)
+			winBox = winBoxLvl * winScale
+			peopleWin.append(winBox)
 
 
 		elapsed_time = time.time() - start_time
-		print("%.5f" % elapsed_time, 'windowsNo=', print(len(peopleProb)))
+		print("%.5f" % elapsed_time, 'windowsNo=', print(len(imgFeats)))
+	# convert to np array for slicing
 	peopleWin = np.array(peopleWin)
+	# predict probabilities for all extracted windows
+	pred = np.array(clf.predict_proba(imgFeats))
+	probas = pred[:, classPos]
+	# select indexes over threshold
+	idxs = np.where(probas > 0.5)
+	peopleWin = peopleWin[idxs]
+	peopleProb = probas[idxs]
+		# from the box in this pyrLvl, get the real widow
 	print("Found windows: ", peopleWin.shape)
 	# non maximum suppresion
 	peopleBoxes, peopleProb = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
@@ -743,10 +750,10 @@ if __name__ == "__main__":
 
 	for imgPath in imgPathsPosTest:
 		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
-		boxesPred = predictImage(clf, img)
+		boxesPred, boxesProbas = predictImage(clf, img)
 		for box in boxesPred:
 			print(box[:2], box[2:])
-			cv2.rectangle(img, box[:2], box[2:], (0, 255, 0), 3)
+			cv2.rectangle(img, (*box[:2]), (*box[2:]), (0, 255, 0), 3)
 		
 		cv2.imshow("boxes", img)
 		cv2.waitKey(100)
