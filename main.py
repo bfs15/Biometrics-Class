@@ -445,14 +445,13 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	return truePos, falsePos, falseNeg
 
 
-def statsImage(clf, img, boxesTrue, thresholds=np.arange(0.5, 1.0, 0.1)):
+def statsImage(boxesPred, peopleProb, boxesTrue, thresholds=np.arange(0.5, 1.0, 0.1)):
 	"""
 	Given classifier, image and true labels
 	returns statistics of the predictions with multiple thresholds
 	return truePosList, falsePosList, falseNegList, threshList
 	"""
 	stats = []
-	boxesPred, peopleProb = predictImage(clf, img)
 	for threshold in thresholds:
 		boxesThresh = boxesPred[np.where(peopleProb > threshold)]
 		truePos, falsePos, falseNeg = compareBoxes(
@@ -751,9 +750,11 @@ if __name__ == "__main__":
 		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
 		sys.stdout.flush()
 
-	for imgPath in imgPathsPosTest:
+	for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
 		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
 		boxesPred, boxesProbas = predictImage(clf, img)
+		truePosList, falsePosList, falseNegList, threshList = statsImage(
+			boxesPred, boxesProbas, boxesTrue)
 		for box in boxesPred:
 			cv2.rectangle(img, (box[1], box[0]), (box[3], box[2]), (0, 255, 0), 3)
 		
