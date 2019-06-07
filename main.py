@@ -218,8 +218,8 @@ def extractFeaturesNeg(imagesNeg):
 	for image_arg, image in enumerate(imagesNeg):
 		image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
 		# skip some images for faster testing
-		if not image_arg % 12 == 0:
-			continue
+		# if not image_arg % 12 == 0:
+		# 	continue
 
 		image = np.array(image)
 		# for imageLevel in pyramidCreate(image, 4, 3, 0.1):
@@ -297,8 +297,8 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 		overlEndY = np.minimum(endX[idxMax], endX[argProbas[:-1]])
 		# width and height of the overlap box
 		# the normal calculation (end-beg+1) can be negative in the cases boxes don't overlap
-		overlH = np.maximum(0, overlEndY - overlBegY + 1)
-		overlW = np.maximum(0, overlEndX - overlBegX + 1)
+		overlH = np.maximum(0, overlEndY - overlBegY)
+		overlW = np.maximum(0, overlEndX - overlBegX)
 		# overlap ratio
 		overlArea = overlH * overlW
 		overlRatio = (overlArea) / area[argProbas[:-1]]
@@ -653,6 +653,7 @@ if __name__ == "__main__":
 	# list of filepaths
 	imgPathsPosTrain, imgPathsNegTrain, boxesPosTrain, windowsPosTrain = load.INRIAPerson(dbTrain)
 	imgPathsPosTest, imgPathsNegTest, boxesPosTest, windowsPosTest = load.INRIAPerson(dbTest)
+	# exit()
 	## load files
 	### Read negative samples ###
 	start_time = time.time()
@@ -670,9 +671,6 @@ if __name__ == "__main__":
 		##
 		# save features to disk for faster testing
 		np.save(x_trainNegPath, x_trainNeg)
-	
-	print("len(x_trainNeg)")
-	print(len(x_trainNeg))
 
 	elapsed_time = time.time() - start_time
 	print("%.5f" % elapsed_time, 'Feats Neg')
@@ -692,8 +690,8 @@ if __name__ == "__main__":
 		# save features to disk for faster testing
 		np.save(x_trainPosPath, x_trainPos)
 
-	print(x_trainNeg.shape)
-	print(x_trainPos.shape)
+	print("x_trainNeg.shape", x_trainNeg.shape)
+	print("x_trainPos.shape", x_trainPos.shape)
 
 	elapsed_time = time.time() - start_time
 	print("%.5f" % elapsed_time, 'Feats Pos')
@@ -706,7 +704,7 @@ if __name__ == "__main__":
 	# first fit to all the postive data and random negative windows
 	# clf.fit(x_train, y_train)
 	# number of epochs of Hard Negative Mining
-	epochN = 1
+	epochN = 2
 	# for each epoch of hard negative mining
 	for epoch in range(epochN):
 		### Fit classifier to current set
@@ -757,8 +755,7 @@ if __name__ == "__main__":
 		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
 		boxesPred, boxesProbas = predictImage(clf, img)
 		for box in boxesPred:
-			print(box[:2], box[2:])
-			cv2.rectangle(img, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
+			cv2.rectangle(img, (box[1], box[0]), (box[3], box[2]), (0, 255, 0), 3)
 		
 		cv2.imshow("boxes", img)
 		cv2.waitKey(100)

@@ -69,8 +69,17 @@ def INRIAPerson(pathDB):
 					coord = line.split(":")[1][1:-1].replace("(", "").replace(")", "").replace(
 						",", "").replace("-", " ").replace("  ", "").split(" ")
 					coord = list(map(int, coord))
+					# [begX, begY, endX, endY]
 					img_coord.append(coord)
 		boxesPos.append(np.array(img_coord))
 	
 	windowsPos = imgWindowsFromBoxes(imgPathsPos, boxesPos)
+	## print minimum and maximum width/height
+	# boxesPosFlat = np.concatenate(boxesPos)
+	# width = boxesPosFlat[:, 2] - boxesPosFlat[:, 0]
+	# height = boxesPosFlat[:, 3] - boxesPosFlat[:, 1]
+	# print(np.amax(width))
+	# print(np.amax(height))
+	# print(np.amin(width))
+	# print(np.amin(height))
 	return imgPathsPos, imgPathsNeg, boxesPos, windowsPos
