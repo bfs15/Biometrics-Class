@@ -341,6 +341,7 @@ def predictImage(clf, img):
 	scale = 0.05
 	lvl = 2
 	imgFeats = []
+	print("predicting image of size: ", img.shape)
 	for argLvl, imgLvl in enumerate(pyramidCreate(img)):
 		if argLvl > lvlsUp:
 			# negative levels, down in the pyramid
@@ -360,20 +361,24 @@ def predictImage(clf, img):
 
 
 		elapsed_time = time.time() - start_time
-		print("%.5f" % elapsed_time, 'windowsNo=', print(len(imgFeats)))
+		print("%.5f" % elapsed_time, 'windowsNo=', len(imgFeats))
 	# convert to np array for slicing
 	peopleWin = np.array(peopleWin)
 	# predict probabilities for all extracted windows
+	start_time = time.time()
 	pred = np.array(clf.predict_proba(imgFeats))
+	elapsed_time = time.time() - start_time
+	print("%.5f" % elapsed_time, 'prediction', len(pred))
 	probas = pred[:, classPos]
 	# select indexes over threshold
 	idxs = np.where(probas > 0.5)
 	peopleWin = peopleWin[idxs]
 	peopleProb = probas[idxs]
 		# from the box in this pyrLvl, get the real widow
-	print("Found windows: ", peopleWin.shape)
+	print("Found windows: ", peopleWin.shape, flush=True)
 	# non maximum suppresion
 	peopleBoxes, peopleProb = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
+	print("Found windows Max: ", peopleBoxes.shape, flush=True)
 
 	return peopleBoxes, peopleProb
 
@@ -697,7 +702,7 @@ if __name__ == "__main__":
 	y_train = np.concatenate([y_trainNeg, y_trainPos])
 	### Hard negative mining
 	# clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
-	clf = svm.SVC(C=100, gamma='auto', class_weight='balanced')
+	clf = svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced')
 	# first fit to all the postive data and random negative windows
 	# clf.fit(x_train, y_train)
 	# number of epochs of Hard Negative Mining
@@ -753,7 +758,7 @@ if __name__ == "__main__":
 		boxesPred, boxesProbas = predictImage(clf, img)
 		for box in boxesPred:
 			print(box[:2], box[2:])
-			cv2.rectangle(img, (*box[:2]), (*box[2:]), (0, 255, 0), 3)
+			cv2.rectangle(img, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
 		
 		cv2.imshow("boxes", img)
 		cv2.waitKey(100)
