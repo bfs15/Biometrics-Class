@@ -36,6 +36,8 @@ classPos = 1
 classNeg = 0
 NMSThresh = 0.5
 processorN = 4
+boxPredictionThreshold = 0.6
+curveStep = 0.01
 
 
 def sobel_filter(img, axis):
@@ -66,7 +68,7 @@ def gradient(img):
 	return mag, angle
 
 
-def pyramidCreate(image, levelsUp=8, levelsDown=6, scale=0.05):
+def pyramidCreate(image, levelsUp=4, levelsDown=3, scale=0.2):
 	"""
 	image : image matrix
 	levels : quantity of levels in the pyramid
@@ -371,16 +373,20 @@ def predictImage(clf, img):
 
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'windowsNo=', len(imgFeats))
+	# Save number of windows for FFPW calculation
+	windowNo = len(peopleWin)
 	# convert to np array for slicing
 	peopleWin = np.array(peopleWin)
 	# predict probabilities for all extracted windows
 	start_time = time.time()
-	pred = np.array(clf.predict_proba(imgFeats))
+
+	pred = np.array(parallelListFunc(clf.predict_proba, imgFeats))
+	# pred = np.array(clf.predict_proba(imgFeats))
 	elapsed_time = time.time() - start_time
 	print("%.5f" % elapsed_time, 'prediction', len(pred))
 	probas = pred[:, classPos]
 	# select indexes over threshold
-	idxs = np.where(probas > 0.5)
+	idxs = np.where(probas > boxPredictionThreshold)
 	peopleWin = peopleWin[idxs]
 	peopleProb = probas[idxs]
 		# from the box in this pyrLvl, get the real widow
@@ -389,7 +395,7 @@ def predictImage(clf, img):
 	peopleBoxes, peopleProb = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
 	print("Found windows Max: ", peopleBoxes.shape, flush=True)
 
-	return peopleBoxes, peopleProb
+	return peopleBoxes, peopleProb, windowNo
 
 
 # TODO: @jit(nopython=True)
@@ -455,7 +461,7 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	return truePos, falsePos, falseNeg
 
 
-def statsImage(boxesPred, peopleProb, boxesTrue, thresholds=np.arange(0.5, 1.0, 0.1)):
+def evaluateImage(boxesPred, peopleProb, boxesTrue, thresholds=np.arange(boxPredictionThreshold, 1.0-curveStep, curveStep)):
 	"""
 	Given classifier, image and true labels
 	returns statistics of the predictions with multiple thresholds
@@ -599,30 +605,34 @@ def getNegHard(imagesNeg, clf, featsLimitNo):
 	"""
 	negHardX = None
 	# slide through images to find hard negatives (false positives)
-	for imgIdx, pathImg in enumerate(imagesNeg):
-		img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
-		img = np.array(img)
-		# list of dimensions (windows, features)
-		winFeats = []
-		# for imgLvl in pyramidCreate(img, 4, 3, 0.1):
-		for imgLvl in pyramidCreate(img):
-			# skip some images for faster testing
-			# if not imgIdx % 100 == 0:
-			#     continue
-			#
-			for win in extractWindowsRandom(imgLvl, 99):
-				winFeat = windowHog(win)
-				winFeats.append(winFeat)
-		# predict windows extracted from image
-		y = clf.predict(winFeats)
-		# select windows which are false positievs
-		winFeats = np.array(winFeats)
-		falsePos = winFeats[np.where(y == classPos)]
-		try:
-			negHardX = np.concatenate([negHardX, falsePos])
-		except ValueError as err:
-			# zero-dimensional arrays cannot be concatenated
-			negHardX = falsePos
+	while True:
+		for imgIdx, pathImg in enumerate(imagesNeg):
+			img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
+			img = np.array(img)
+			# list of dimensions (windows, features)
+			winFeats = []
+			# for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+			for imgLvl in pyramidCreate(img):
+				# skip some images for faster testing
+				# if not imgIdx % 100 == 0:
+				#     continue
+				#
+				for win in extractWindowsRandom(imgLvl, 4):
+					winFeat = windowHog(win)
+					winFeats.append(winFeat)
+			# predict windows extracted from image
+			y = clf.predict(winFeats)
+			# select windows which are false positievs
+			winFeats = np.array(winFeats)
+			falsePos = winFeats[np.where(y == classPos)]
+			try:
+				negHardX = np.concatenate([negHardX, falsePos])
+			except ValueError as err:
+				# zero-dimensional arrays cannot be concatenated
+				negHardX = falsePos
+			# if we have enough features, break out of loop
+			if negHardX.shape[0] > featsLimitNo:
+				break
 		# if we have enough features, break out of loop
 		if negHardX.shape[0] > featsLimitNo:
 			break
@@ -644,10 +654,8 @@ if __name__ == "__main__":
 						help='ignores cached data on disk')
 	## Parse arguments
 	args = parser.parse_args()
-	print("start",flush=True)
-	nonMaxSuppresionTest()
-	print("end",flush=True)
-	exit()
+
+	timestr = time.strftime("%Y%m%d-%H%M")
 	## load files
 	# filepath variables
 	# prefix     = "/home/html/inf/menotti/ci1028-191/INRIAPerson/"
@@ -659,15 +667,36 @@ if __name__ == "__main__":
 	dbTestPos  = prefix + "/Test/pos"
 	dbTestNeg  = prefix + "/Test/neg"
 	dirDB      = "DB"
-	extNp      = ".npy"
-	x_trainNegPath = dirDB + '/' + 'featsNegFile' + extNp
-	x_trainPosPath = dirDB + '/' + 'featsPosFile' + extNp
+	extNp = ".npy"
+	x_trainNegPathname = dirDB + '/' + 'featsNegFile'
+	x_trainNegPath = x_trainNegPathname + extNp
+	x_trainPosPathname = dirDB + '/' + 'featsPosFile'
+	x_trainPosPath = x_trainPosPathname + extNp
+	curveImgPathname = "curve"
 	# list of filepaths
 	imgPathsPosTrain, imgPathsNegTrain, boxesPosTrain, windowsPosTrain = load.INRIAPerson(dbTrain)
 	imgPathsPosTest, imgPathsNegTest, boxesPosTest, windowsPosTest = load.INRIAPerson(dbTest)
 	# exit()
 	## load files
 	# """"" # Train model
+	### Read positive samples ###
+	start_time = time.time()
+
+	if os.path.isfile(x_trainPosPath) and not args.noCache:
+		# read features from disk
+		x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
+	else:
+		# extract windows from the positive test folder
+		# x_trainPos, y_trainPos = parallelListFunc(
+		#     extractFeaturesPos, list(windowsPos), isTupleList=True)
+		## Sequential
+		x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
+		##
+		# save features to disk for faster testing
+		np.save(x_trainPosPath, x_trainPos)
+
+	elapsed_time = time.time() - start_time
+	print("%.5f" % elapsed_time, 'Feats Pos')
 	### Read negative samples ###
 	start_time = time.time()
 	# if cache file exists and no argument against
@@ -687,28 +716,9 @@ if __name__ == "__main__":
 
 	elapsed_time = time.time() - start_time
 	print("%.5f" % elapsed_time, 'Feats Neg')
-	### Read positive samples
-	start_time = time.time()
-
-	if os.path.isfile(x_trainPosPath) and not args.noCache:
-		# read features from disk
-		x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
-	else:
-		# extract windows from the positive test folder
-		# x_trainPos, y_trainPos = parallelListFunc(
-		#     extractFeaturesPos, list(windowsPos), isTupleList=True)
-		## Sequential
-		x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
-		##
-		# save features to disk for faster testing
-		np.save(x_trainPosPath, x_trainPos)
-
+	# concatenate positive and negative data into the train set
 	print("x_trainNeg.shape", x_trainNeg.shape)
 	print("x_trainPos.shape", x_trainPos.shape)
-
-	elapsed_time = time.time() - start_time
-	print("%.5f" % elapsed_time, 'Feats Pos')
-	# concatenate positive and negative data into the train set
 	x_train = np.concatenate([x_trainNeg, x_trainPos])
 	y_train = np.concatenate([y_trainNeg, y_trainPos])
 	### Hard negative mining
@@ -760,32 +770,85 @@ if __name__ == "__main__":
 		x_train = np.concatenate([x_train, x_trainNegHard])
 		y_train = np.concatenate([y_train, y_trainNegHard])
 
+		np.save(x_trainNegPathname + extNp, x_trainNeg)
+
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
 		sys.stdout.flush()
 	# end hard negative mining
 	# Save model to disk
-	timestr = time.strftime("%Y%m%d-%H%M")
 	modelBasename = 'classifier'
 	modelExt = '.joblib'
-	joblib.dump(clf, modelBasename + '+' + timestr + modelExt)
+	modelPath = modelBasename + '+' + timestr + modelExt
+	print("saving model to ", modelPath)
+	joblib.dump(clf, modelPath)
 	# """"" # Train model
 	""""" # Load a model
 	clf = joblib.load('filename' + modelExt)
 	""""" # Load a model
 
-
+	thresholds = np.arange(boxPredictionThreshold, 1.0-curveStep, curveStep)
+	truePosTotal = np.zeros(thresholds.shape)
+	falsePosTotal = np.zeros(thresholds.shape)
+	falseNegTotal = np.zeros(thresholds.shape)
+	missRateTotal = np.zeros(thresholds.shape)
 	for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
 		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
-		boxesPred, boxesProbas = predictImage(clf, img)
-		truePosList, falsePosList, falseNegList, threshList = statsImage(
-			boxesPred, boxesProbas, boxesTrue)
-		for box in boxesPred:
+		boxesPred, boxesProbas, windowNo = predictImage(clf, img)
+		result = evaluateImage(boxesPred, boxesProbas, boxesTrue, thresholds)
+		truePosList, falsePosList, falseNegList, threshList = map(np.array, result)
+		# """ # Display for user
+		for box in boxesPred[np.where(boxesProbas > 0.9)]:
 			cv2.rectangle(img, (box[1], box[0]), (box[3], box[2]), (0, 255, 0), 3)
-		
 		cv2.imshow("boxes", img)
 		cv2.waitKey(100)
-		
+		# """ # Display for user
+		# Calculate missRate = falseNegative / 
+		truePosTotal += truePosList
+		falsePosTotal += falsePosList
+		falseNegTotal += falseNegList
+		missRateTotal += falseNegList / (truePosList + falseNegList + 1.0e-07)
+
+		imgNo += 1
+	# Get mean values per image
+	truePosPerImg =  truePosTotal / imgNo
+	falsePosPerImg =  falsePosTotal / imgNo
+	falseNegPerImg =  falseNegTotal / imgNo
+	missRate = missRateTotal / imgNo
+
+	def pltCurve(valuesX, valuesY, labelX, labelY, scale='log', limits=[0.01, 1.00, 0.01, 1.00]):
+		"""
+		plots a curve, where 
+		ex: Given false positive and false negative rates, produce a DET Curve.
+		import matplotlib.pyplot as plt
+		Curve(fpsList, fnsList, "false positive rate", "false negative rate")
+		plt.show()
+		"""
+		import matplotlib.pyplot as plt
+		import matplotlib.ticker
+		axis_min = min(valuesX[0], valuesY[-1])
+		fig, ax = plt.subplots()
+		plt.xlabel(labelX)
+		plt.ylabel(labelY)
+		plt.plot(valuesX, valuesY, '-|')
+		plt.yscale(scale)
+		plt.xscale(scale)
+		ax.get_xaxis().set_major_formatter(
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+		ax.get_yaxis().set_major_formatter(
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+		# ticks_to_use = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.0]
+		ticks_to_use = np.logspace(np.log10(0.01), np.log10(1.0), num=14, base=10)
+		ticks_to_use = np.round(ticks_to_use, 2)
+		print(ticks_to_use)
+
+		ax.set_xticks(ticks_to_use)
+		ax.set_yticks(ticks_to_use)
+		plt.axis(limits)
+		# plt.show()
+
+	pltCurve(falsePosPerImg, missRate, "falsePosPerImg", "missRate")
+	plt.savefig(curveImgPathname + '+' + timestr + ".png")
 
 	# cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
 	# print(cv_results)
