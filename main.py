@@ -19,6 +19,8 @@ import matplotlib.cm
 import time
 import itertools
 import random
+import pickle
+import joblib
 
 import multiprocessing
 from numba import jit
@@ -252,20 +254,13 @@ def extractFeaturesPos(windowsPos):
 	return x_train, y_train
 
 
-# TODO: @jit(nopython=True)probas
-def nonMaxSuppresion(boxes, probas, overlapThresh):
+@jit(nopython=True)
+def nonMaxSuppresionIdxs(boxes, probas, overlapThresh):
 	"""
 	boxes: 2darray of shape (n, 4) / n is the number of boxes
 	probas: 1darray of shape (n), each element is the probability of the corresponding box
 	overlapThresh: if boxes exceed this threshold of overlap with the maximum box, it is suppressed
 	"""
-	if len(boxes) == 0:
-		# no boxes, return an empty list
-		return []
-	# if the bounding boxes are integers
-	# convert them to floats, float division is faster
-	if boxes.dtype.kind == "i":
-		boxes = boxes.astype("float")
 	# list of max boxes indexes
 	maxBoxIdxs = []
 	maxBoxProbas = []
@@ -275,7 +270,7 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 	endY = boxes[:, 2]
 	endX = boxes[:, 3]
 	# area of the bounding boxes
-	area = (endY - begY + 1) * (endX - begX + 1)
+	area = (endY - begY) * (endX - begX)
 	# sort boxes by the probabilities
 	argProbas = np.argsort(probas)
 	# loop removing boxes from the idx list, until no boxes remain
@@ -303,14 +298,28 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 		overlArea = overlH * overlW
 		overlRatio = (overlArea) / area[argProbas[:-1]]
 		# box idxs which overlap with the max box is over the threshold
-		overlBoxIdxs = np.where(overlRatio > overlapThresh)[0]
+		overlBoxIdxs = np.where(overlRatio > overlapThresh)[0].astype(np.int32)
 		# delete boxes that overlap and the max proba box
-		idxsDelete = np.concatenate((overlBoxIdxs, [len(argProbas)-1]))
+		lastList = np.array([(argProbas.shape[0])-1], np.int32)
+		idxsDelete = np.concatenate((overlBoxIdxs, lastList))
 		argProbas = np.delete(argProbas, idxsDelete)
 
 	# return boxes from max box idxs
-	return boxes[maxBoxIdxs].astype("int32"), maxBoxProbas
+	return maxBoxIdxs, maxBoxProbas
 
+
+def nonMaxSuppresion(boxes, probas, overlapThresh):
+	if len(boxes) == 0:
+		# no boxes, return an empty list
+		return np.array([])
+	# if the bounding boxes are integers
+	# convert them to floats, float division is faster
+	if boxes.dtype.kind == "i":
+		boxes = boxes.astype(np.float32)
+
+	maxBoxIdxs, maxBoxProbas = nonMaxSuppresionIdxs(boxes, probas, overlapThresh)
+	# return boxes from max box idxs
+	return boxes[maxBoxIdxs], maxBoxProbas
 
 def nonMaxSuppresionTest():
 	boxes = np.array([[1, 2, 3, 4], [1, 2, 3, 5], [1+100, 2 + 100,
@@ -383,6 +392,7 @@ def predictImage(clf, img):
 	return peopleBoxes, peopleProb
 
 
+# TODO: @jit(nopython=True)
 def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	"""
 	boxesTrue: true boxes
@@ -396,7 +406,7 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	# if the bounding boxes are integers
 	# convert them to floats, float division is faster
 	if boxes.dtype.kind == "i":
-		boxes = boxes.astype("float")
+		boxes = boxes.astype(np.float)
 	# list of max boxes indexes
 	maxBoxIdxs = []
 	# coordinates of the bounding boxes
@@ -411,7 +421,7 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	# area of the bounding boxes
 	area = (trueEndY - trueBegY + 1) * (trueEndX - trueBegX + 1)
 	# loop removing boxes from the idx list, until no boxes remain
-	for idx in range(boxesTrue.size):
+	for idx in range(len(boxesTrue)):
 		# calculate overlap:
 		# get bot-rightmost beginning (x, y) coordinates of both the boxes
 		# and the top-leftmost ending (x, y) coordinates of both the boxes
@@ -634,7 +644,10 @@ if __name__ == "__main__":
 						help='ignores cached data on disk')
 	## Parse arguments
 	args = parser.parse_args()
-
+	print("start",flush=True)
+	nonMaxSuppresionTest()
+	print("end",flush=True)
+	exit()
 	## load files
 	# filepath variables
 	# prefix     = "/home/html/inf/menotti/ci1028-191/INRIAPerson/"
@@ -654,6 +667,7 @@ if __name__ == "__main__":
 	imgPathsPosTest, imgPathsNegTest, boxesPosTest, windowsPosTest = load.INRIAPerson(dbTest)
 	# exit()
 	## load files
+	# """"" # Train model
 	### Read negative samples ###
 	start_time = time.time()
 	# if cache file exists and no argument against
@@ -749,6 +763,17 @@ if __name__ == "__main__":
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
 		sys.stdout.flush()
+	# end hard negative mining
+	# Save model to disk
+	timestr = time.strftime("%Y%m%d-%H%M")
+	modelBasename = 'classifier'
+	modelExt = '.joblib'
+	joblib.dump(clf, modelBasename + '+' + timestr + modelExt)
+	# """"" # Train model
+	""""" # Load a model
+	clf = joblib.load('filename' + modelExt)
+	""""" # Load a model
+
 
 	for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
 		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
