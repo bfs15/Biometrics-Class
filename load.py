@@ -1,8 +1,10 @@
 
+import matplotlib.pyplot as plt
 import glob
 import os
 import sys
 import numpy as np
+import sys
 
 import cv2
 
@@ -52,6 +54,26 @@ def imgWindowsFromBoxes(imgPaths, imgsBoxes):
 			yield window
 
 
+def printBoxStats(boxesPos):
+	if isinstance(boxesPos, list):
+		boxesPosFlat = np.concatenate(boxesPos)
+	else:
+		boxesPosFlat = boxesPos
+	width = boxesPosFlat[:, 2] - boxesPosFlat[:, 0]
+	height = boxesPosFlat[:, 3] - boxesPosFlat[:, 1]
+	width = np.round(width / 2)
+	height = np.round(height / 2)
+	print("width ", sorted(width))
+	print("height", sorted(height))
+	print("amax  ", np.amax(width), np.amax(height))
+	print("amin  ", np.amin(width), np.amin(height))
+	sys.stdout.flush()
+
+	plt.plot(sorted(width))
+	plt.plot(sorted(height))
+	plt.ylabel('some numbers')
+
+
 def INRIAPerson(pathDB):
 	"""
 	pathDB: path to directory INRIAPerson/Test or Train
@@ -75,11 +97,4 @@ def INRIAPerson(pathDB):
 	
 	windowsPos = imgWindowsFromBoxes(imgPathsPos, boxesPos)
 	## print minimum and maximum width/height
-	# boxesPosFlat = np.concatenate(boxesPos)
-	# width = boxesPosFlat[:, 2] - boxesPosFlat[:, 0]
-	# height = boxesPosFlat[:, 3] - boxesPosFlat[:, 1]
-	# print(np.amax(width))
-	# print(np.amax(height))
-	# print(np.amin(width))
-	# print(np.amin(height))
 	return imgPathsPos, imgPathsNeg, boxesPos, windowsPos

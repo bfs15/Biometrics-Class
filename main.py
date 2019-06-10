@@ -24,6 +24,7 @@ import joblib
 
 import multiprocessing
 from numba import jit
+import psutil
 
 import skimage.feature
 import sklearn
@@ -31,13 +32,41 @@ from skimage import data, exposure
 from sklearn import svm
 from sklearn import metrics
 from sklearn import model_selection
+import sklearn.ensemble
 
 classPos = 1
 classNeg = 0
 NMSThresh = 0.5
 processorN = 4
-boxPredictionThreshold = 0.6
+boxPredictionThreshold = 0.5
 curveStep = 0.01
+cpuCount = multiprocessing.cpu_count() # // 2
+# pyramid
+lvlsUp = 2
+lvlsDown = 1
+pyrScale = 0.20
+imgDownscale = 0.5
+
+
+def limitProcessPriority():
+	"is called at every process start"
+	p = psutil.Process(os.getpid())
+	# set to lowest priority, this is windows only, on Unix use ps.nice(19)
+	p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+
+
+def chunks(l, n):
+	"""Yield successive n-sized chunks from l."""
+	n = len(l)//n + 1
+	for i in range(0, len(l), n):
+		yield list(l[i:i + n])
+
+
+def chunkSplit(l, n):
+	"""Yield n successive evenly-sized chunks from l."""
+	step = len(l)//n + 1
+	for i in range(0, len(l), step):
+		yield list(l[i:i + step])
 
 
 def sobel_filter(img, axis):
@@ -68,7 +97,7 @@ def gradient(img):
 	return mag, angle
 
 
-def pyramidCreate(image, levelsUp=4, levelsDown=3, scale=0.2):
+def pyramidCreate(image, levelsUp=lvlsUp, levelsDown=lvlsDown, scale=pyrScale):
 	"""
 	image : image matrix
 	levels : quantity of levels in the pyramid
@@ -222,8 +251,8 @@ def extractFeaturesNeg(imagesNeg):
 	for image_arg, image in enumerate(imagesNeg):
 		image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
 		# skip some images for faster testing
-		# if not image_arg % 12 == 0:
-		# 	continue
+		if not image_arg % 12 == 0:
+			continue
 
 		image = np.array(image)
 		# for imageLevel in pyramidCreate(image, 4, 3, 0.1):
@@ -312,8 +341,8 @@ def nonMaxSuppresionIdxs(boxes, probas, overlapThresh):
 
 def nonMaxSuppresion(boxes, probas, overlapThresh):
 	if len(boxes) == 0:
-		# no boxes, return an empty list
-		return np.array([])
+		# no boxes
+		return np.empty([0,4]), np.array([])
 	# if the bounding boxes are integers
 	# convert them to floats, float division is faster
 	if boxes.dtype.kind == "i":
@@ -321,7 +350,7 @@ def nonMaxSuppresion(boxes, probas, overlapThresh):
 
 	maxBoxIdxs, maxBoxProbas = nonMaxSuppresionIdxs(boxes, probas, overlapThresh)
 	# return boxes from max box idxs
-	return boxes[maxBoxIdxs], maxBoxProbas
+	return boxes[maxBoxIdxs], np.array(maxBoxProbas)
 
 def nonMaxSuppresionTest():
 	boxes = np.array([[1, 2, 3, 4], [1, 2, 3, 5], [1+100, 2 + 100,
@@ -336,24 +365,15 @@ def nonMaxSuppresionTest():
 	0.9 [101. 102. 103. 104.]
 	"""
 
-
-def predictImage(clf, img):
-	"""
-	Given classifier and image, returns a array of bounding boxes (boxesNo,4)
-	boxesPred = predictImage(clf, img)
-	"""
+def extractFeats(img):
 	# array of probability of predictions for windows
 	peopleProb = []
 	# array of the position of windows
 	peopleWin = []
 	winSz = (128, 64)
-	lvlsUp = 8
-	lvlsDown = 6
-	scale = 0.05
-	lvl = 2
 	imgFeats = []
 	print("predicting image of size: ", img.shape)
-	for argLvl, imgLvl in enumerate(pyramidCreate(img)):
+	for argLvl, imgLvl in enumerate(pyramidCreate(img, lvlsUp, lvlsDown, pyrScale)):
 		if argLvl > lvlsUp:
 			# negative levels, down in the pyramid
 			argLvl = argLvl-(lvlsUp+lvlsDown+1)
@@ -363,13 +383,12 @@ def predictImage(clf, img):
 
 		# if scale decreases, window increases in relative size
 		# e.g. the window in the 0.5 scaled image has double the size (1/0.5)
-		winScale = 1/(1+scale*argLvl)
+		winScale = 1/(1+pyrScale*argLvl)
 		for win, winBoxLvl in extractWindows(imgLvl):
 			winFeats = windowHog(win)
 			imgFeats.append(winFeats)
 			winBox = winBoxLvl * winScale
 			peopleWin.append(winBox)
-
 
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'windowsNo=', len(imgFeats))
@@ -377,20 +396,52 @@ def predictImage(clf, img):
 	windowNo = len(peopleWin)
 	# convert to np array for slicing
 	peopleWin = np.array(peopleWin)
+	return imgFeats, peopleWin, windowNo
+
+
+def predictFeatures(clf, imgFeats, peopleWin):
 	# predict probabilities for all extracted windows
 	start_time = time.time()
-
+	""" # Parallel
 	pred = np.array(parallelListFunc(clf.predict_proba, imgFeats))
-	# pred = np.array(clf.predict_proba(imgFeats))
+	"""  # Sequential
+	# """
+	print("Started predicting probabilities, featNo=", len(imgFeats),  flush=True)
+	print("Progress: ", end=" ",  flush=True)
+	chunks = chunkSplit(imgFeats, 20)
+	predictions = []
+	for chunkNo, chunk in enumerate(chunks):
+		pred = np.array(clf.predict_proba(chunk))
+		predictions.append(pred)
+		print(" {:0.2f}".format((chunkNo+1)/20), end=" ",  flush=True)
+	print()
+	pred = np.concatenate(predictions)
+	"""
+	pred = np.array(clf.predict_proba(imgFeats))
+	# """
+
 	elapsed_time = time.time() - start_time
 	print("%.5f" % elapsed_time, 'prediction', len(pred))
+	# Get only positive prediction probability
 	probas = pred[:, classPos]
 	# select indexes over threshold
 	idxs = np.where(probas > boxPredictionThreshold)
 	peopleWin = peopleWin[idxs]
-	peopleProb = probas[idxs]
-		# from the box in this pyrLvl, get the real widow
+	peopleProb = np.array(probas[idxs])
+	# from the box in this pyrLvl, get the real widow
 	print("Found windows: ", peopleWin.shape, flush=True)
+	return np.array(peopleWin), np.array(peopleProb)
+
+
+def predictImage(clf, img):
+	"""
+	Given classifier and image, returns a array of bounding boxes (boxesNo,4)
+	boxesPred = predictImage(clf, img)
+	"""
+	# Extract features from all windows in image
+	imgFeats, peopleWin, windowNo = extractFeats(img)
+	# From features, use classifier to predict probabilities
+	peopleWin, peopleProb = predictFeatures(clf, imgFeats, peopleWin)
 	# non maximum suppresion
 	peopleBoxes, peopleProb = nonMaxSuppresion(peopleWin, peopleProb, NMSThresh)
 	print("Found windows Max: ", peopleBoxes.shape, flush=True)
@@ -411,8 +462,10 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	falseNeg = 0
 	# if the bounding boxes are integers
 	# convert them to floats, float division is faster
-	if boxes.dtype.kind == "i":
-		boxes = boxes.astype(np.float)
+	if boxesTrue.dtype.kind == "i":
+		boxesTrue = boxesTrue.astype(np.float)
+	if boxesPred.dtype.kind == "i":
+		boxesPred = boxesPred.astype(np.float)
 	# list of max boxes indexes
 	maxBoxIdxs = []
 	# coordinates of the bounding boxes
@@ -428,6 +481,12 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 	area = (trueEndY - trueBegY + 1) * (trueEndX - trueBegX + 1)
 	# loop removing boxes from the idx list, until no boxes remain
 	for idx in range(len(boxesTrue)):
+		# print("idx", idx, "boxesTrue[idx]", boxesTrue[idx], flush=True)
+		# print("len(boxesPred)", len(boxesPred), flush=True)
+		if len(boxesPred) < 1:
+			# no predicted box overlaps with this true one
+			falseNeg += 1
+			continue
 		# calculate overlap:
 		# get bot-rightmost beginning (x, y) coordinates of both the boxes
 		# and the top-leftmost ending (x, y) coordinates of both the boxes
@@ -445,6 +504,9 @@ def compareBoxes(boxesTrue, boxesPred, overlapThresh):
 		# overlap ratio
 		overlArea = overlH * overlW
 		overlRatio = (overlArea) / area[idx]
+		# print("overlH",overlH, flush=True)
+		# print("overlW",overlW, flush=True)
+		# print("overlRatio", overlRatio, flush=True)
 		# true positive if the box with most overlap is over threshold
 		idxMaxOverl = np.argmax(overlRatio)
 		if overlRatio[idxMaxOverl] > overlapThresh:
@@ -475,7 +537,7 @@ def evaluateImage(boxesPred, peopleProb, boxesTrue, thresholds=np.arange(boxPred
 		# missRate =  falseNegative / conditionPositive
 		missRate = falseNeg / len(boxesTrue)
 
-		stats.append(truePos, falsePos, falseNeg, threshold)
+		stats.append([truePos, falsePos, falseNeg, threshold])
 	truePosList, falsePosList, falseNegList, threshList = list(zip(*stats))
 	return truePosList, falsePosList, falseNegList, threshList
 
@@ -486,20 +548,6 @@ def tupleListToMultipleLists(tupleList):
 	returns concatenated list: x:[0: ..., ... , N: ...], y:[0: ..., ... , N: ...]
 	"""
 	return list(map(np.concatenate, zip(*tupleList)))
-
-
-def chunks(l, n):
-	"""Yield successive n-sized chunks from l."""
-	n = len(l)//n + 1
-	for i in range(0, len(l), n):
-		yield list(l[i:i + n])
-
-
-def chunkSplit(l, n):
-	"""Yield n successive evenly-sized chunks from l."""
-	step = len(l)//n + 1
-	for i in range(0, len(l), step):
-		yield list(l[i:i + step])
 
 
 def splitListN(a, n):
@@ -516,12 +564,12 @@ def parallelListFunc(fun, itemList, isTupleList=False, *argv):
 	isTupleList: if the returned list is a list of tuples
 	"""
 	# Split items to process into chunks (evenly)
-	itemChunks = list(chunkSplit(itemList, multiprocessing.cpu_count()))
+	itemChunks = list(chunkSplit(itemList, cpuCount))
 	print('dividing work to cpus')
 	for chunk in itemChunks:
 		print(len(chunk))
 	# Create Pool with the number of procs detected
-	p = multiprocessing.Pool(multiprocessing.cpu_count())
+	p = multiprocessing.Pool(cpuCount)
 	# poolResult = [returnFun0, ... , returnFunProcNo]
 	poolResult = p.map(fun, itemChunks)
 	# each list element of poolResult is a thread result
@@ -564,14 +612,14 @@ def parallelListFuncArgv(fun, itemList, isTupleList=False, *argv):
 		k, m = divmod(len(a), n)
 		return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 	# Split items to process into chunks (evenly)
-	itemChunks = list(splitListN(itemList, multiprocessing.cpu_count()))
+	itemChunks = list(splitListN(itemList, cpuCount))
 	# Create Pool with the number of procs detected
-	p = multiprocessing.Pool(multiprocessing.cpu_count())
+	p = multiprocessing.Pool(cpuCount)
 	# function unpacker, since p.map accepts only 1 argument
 	# list of arguments, len(arguments) == cpu_count()
 	arguments = []
 	# for each cpu, make its arguments
-	for idx in range(multiprocessing.cpu_count()):
+	for idx in range(cpuCount):
 		# put the function and a chunk into the arguments
 		arguments.append([fun, itemChunks[idx]])
 		# pass on the rest of the arguments
@@ -654,6 +702,8 @@ if __name__ == "__main__":
 						help='ignores cached data on disk')
 	## Parse arguments
 	args = parser.parse_args()
+	# hopefully your pc doesn't freeze
+	limitProcessPriority()
 
 	timestr = time.strftime("%Y%m%d-%H%M")
 	## load files
@@ -687,11 +737,12 @@ if __name__ == "__main__":
 		x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
 	else:
 		# extract windows from the positive test folder
-		# x_trainPos, y_trainPos = parallelListFunc(
-		#     extractFeaturesPos, list(windowsPos), isTupleList=True)
-		## Sequential
+		# """ # Parallel
+		x_trainPos, y_trainPos = parallelListFunc(
+			 extractFeaturesPos, list(windowsPosTrain), isTupleList=True)
+		""" # Sequential
 		x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
-		##
+		# """
 		# save features to disk for faster testing
 		np.save(x_trainPosPath, x_trainPos)
 
@@ -705,12 +756,12 @@ if __name__ == "__main__":
 		x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
 	else:
 		# extract features from images
-		## Parallel ##
+		# """ # Parallel
 		x_trainNeg, y_trainNeg = parallelListFunc(
 			extractFeaturesNeg, list(imgPathsNegTrain), isTupleList=True)
-		## Sequential ##
+		""" # Sequential
 		# x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imgPathsNeg))
-		##
+		# """
 		# save features to disk for faster testing
 		np.save(x_trainNegPath, x_trainNeg)
 
@@ -723,11 +774,13 @@ if __name__ == "__main__":
 	y_train = np.concatenate([y_trainNeg, y_trainPos])
 	### Hard negative mining
 	# clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
-	clf = svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced')
+	n_estimators = cpuCount
+	clf = sklearn.ensemble.BaggingClassifier(svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced', probability=True), max_samples=1.0 / n_estimators, n_estimators=n_estimators, n_jobs=-1)
 	# first fit to all the postive data and random negative windows
 	# clf.fit(x_train, y_train)
 	# number of epochs of Hard Negative Mining
 	epochN = 2
+	# epochN = 5
 	# for each epoch of hard negative mining
 	for epoch in range(epochN):
 		### Fit classifier to current set
@@ -739,9 +792,16 @@ if __name__ == "__main__":
 		# if last epoch, train with probability enabled
 		# to use Non Max Suppresion afterwards
 		if epoch == epochN-1:
-			clf.set_params(probability=True)
-
+			print("last epoch, probability enabled")
+			# clf.set_params(probability=True)
+		# train
 		clf.fit(x_train, y_train)
+		# Save model to disk
+		modelBasename = 'classifier'
+		modelExt = '.joblib'
+		modelPath = modelBasename + '+' + time.strftime("%Y%m%d-%H%M") + modelExt
+		print("saving model to ", modelPath)
+		joblib.dump(clf, modelPath)
 
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
@@ -761,55 +821,88 @@ if __name__ == "__main__":
 		imgPathsNegShuffled = scrambled(list(imgPathsNegTrain))
 		# get hard negatives
 		print("trying to get hard negatives:", x_train.shape[0])
+		""" # Parallel
 		x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
-			imgPathsNegShuffled, True, clf, x_train.shape[0] / multiprocessing.cpu_count())
-		# x_trainNegHard, y_trainNegHard = getNegHard(
-		#     imagesNeg, clf, x_train.shape[0])
+			imgPathsNegShuffled, True, clf, x_train.shape[0] / cpuCount)
+		""" # Sequential
+		x_trainNegHard, y_trainNegHard = getNegHard(imgPathsNegShuffled, clf, x_train.shape[0])
+		# """
 		# add hard negatives on the training set
 		print("hard negatives no:", x_trainNegHard.shape)
 		x_train = np.concatenate([x_train, x_trainNegHard])
 		y_train = np.concatenate([y_train, y_trainNegHard])
 
-		np.save(x_trainNegPathname + extNp, x_trainNeg)
+		x_trainNegPathEpoch = x_trainNegPathname + '+' + time.strftime("%Y%m%d-%H%M") + extNp
+		print("saving neg to ", x_trainNegPathEpoch)
+		np.save(x_trainNegPathEpoch, x_trainNeg)
 
 		elapsed_time = time.time() - start_time
 		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
 		sys.stdout.flush()
 	# end hard negative mining
-	# Save model to disk
-	modelBasename = 'classifier'
-	modelExt = '.joblib'
-	modelPath = modelBasename + '+' + timestr + modelExt
-	print("saving model to ", modelPath)
-	joblib.dump(clf, modelPath)
 	# """"" # Train model
 	""""" # Load a model
-	clf = joblib.load('filename' + modelExt)
-	""""" # Load a model
+	clf = joblib.load('classifier+20190609-1357.joblib')
+	# """"" # Load a model
 
 	thresholds = np.arange(boxPredictionThreshold, 1.0-curveStep, curveStep)
 	truePosTotal = np.zeros(thresholds.shape)
 	falsePosTotal = np.zeros(thresholds.shape)
 	falseNegTotal = np.zeros(thresholds.shape)
 	missRateTotal = np.zeros(thresholds.shape)
-	for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
-		img = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
-		boxesPred, boxesProbas, windowNo = predictImage(clf, img)
-		result = evaluateImage(boxesPred, boxesProbas, boxesTrue, thresholds)
-		truePosList, falsePosList, falseNegList, threshList = map(np.array, result)
-		# """ # Display for user
-		for box in boxesPred[np.where(boxesProbas > 0.9)]:
-			cv2.rectangle(img, (box[1], box[0]), (box[3], box[2]), (0, 255, 0), 3)
-		cv2.imshow("boxes", img)
-		cv2.waitKey(100)
-		# """ # Display for user
-		# Calculate missRate = falseNegative / 
-		truePosTotal += truePosList
-		falsePosTotal += falsePosList
-		falseNegTotal += falseNegList
-		missRateTotal += falseNegList / (truePosList + falseNegList + 1.0e-07)
+	imgTotalNo = len(boxesPosTest)
+	imgNo = 0
+	imgPathsPosTest = list(imgPathsPosTest)
+	for imgPath in imgPathsPosTest:
+		print(imgPath)
 
-		imgNo += 1
+	load.printBoxStats(boxesPosTest)
+	# plt.show()
+	try:
+		for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
+			print(imgPath, flush=True)
+			print(boxesTrue, flush=True)
+			imgTrue = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
+			img = cv2.resize(imgTrue, None, fx=imgDownscale, fy=imgDownscale)
+			# Get classifier preditction boxes and their probabilities
+			boxesPred, boxesProbas, windowNo = predictImage(clf, img)
+			boxesThreshCopy = boxesPred.copy()
+			boxesThreshCopy[:, 1] = boxesPred[:, 0]
+			boxesThreshCopy[:, 0] = boxesPred[:, 1]
+			boxesThreshCopy[:, 3] = boxesPred[:, 2]
+			boxesThreshCopy[:, 2] = boxesPred[:, 3]
+			boxesPred = boxesThreshCopy.astype(np.int32)
+			boxesPred = boxesPred * 2
+			# Compare true boxes with predictions with with a varying threshold
+			result = evaluateImage(boxesPred, boxesProbas, boxesTrue, thresholds)
+			# Make result stats np arrays
+			truePosList, falsePosList, falseNegList, threshList = map(np.array, result)
+			# Calculate missRateList from raw stats
+			missRateList = falseNegList / (truePosList + falseNegList + 1.0e-07)
+			# """ # Display for user
+			print(boxesPred[np.where(boxesProbas > 0.7)])
+			for box in boxesPred[np.where(boxesProbas > 0.7)]:
+				cv2.rectangle(imgTrue, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
+			cv2.imshow("boxes", imgTrue)
+			cv2.waitKey(10)
+			# """ # Display for user
+			# Accumulate stats
+			truePosTotal += truePosList
+			falsePosTotal += falsePosList
+			falseNegTotal += falseNegList
+			missRateTotal += missRateList
+			# count images
+			imgNo += 1
+			# print progress and partial stats
+			print(">>> {:0.4f} of images processed ".format(
+				imgNo/imgTotalNo), time.strftime("%Y%m%d-%H%M"))
+			print("falsePosList =", falsePosList)
+			print("missRateList =", missRateList)
+			print("falsePosTotal=", falsePosTotal / imgNo)
+			print("missRateTotal=", missRateTotal / imgNo)
+	except KeyboardInterrupt as err:
+		print("\nStopped after imgNo=", imgNo)
+		pass
 	# Get mean values per image
 	truePosPerImg =  truePosTotal / imgNo
 	falsePosPerImg =  falsePosTotal / imgNo
@@ -821,8 +914,9 @@ if __name__ == "__main__":
 		plots a curve, where 
 		ex: Given false positive and false negative rates, produce a DET Curve.
 		import matplotlib.pyplot as plt
-		Curve(fpsList, fnsList, "false positive rate", "false negative rate")
+		pltCurve(fpsList, fnsList, "false positive rate", "false negative rate")
 		plt.show()
+		plt.savefig(pathCurvePic)
 		"""
 		import matplotlib.pyplot as plt
 		import matplotlib.ticker
@@ -834,20 +928,25 @@ if __name__ == "__main__":
 		plt.yscale(scale)
 		plt.xscale(scale)
 		ax.get_xaxis().set_major_formatter(
-					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.2}'.format(y)))
 		ax.get_yaxis().set_major_formatter(
-					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.0%}'.format(y)))
-		# ticks_to_use = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.0]
-		ticks_to_use = np.logspace(np.log10(0.01), np.log10(1.0), num=14, base=10)
-		ticks_to_use = np.round(ticks_to_use, 2)
-		print(ticks_to_use)
-
-		ax.set_xticks(ticks_to_use)
-		ax.set_yticks(ticks_to_use)
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.2}'.format(y)))
+		# ticks X
+		ticks_to_useX = np.logspace(np.log10(limits[0]), np.log10(limits[1]), num=14, base=10)
+		ticks_to_useX = np.round(ticks_to_useX, 2)
+		ax.set_xticks(ticks_to_useX)
+		# ticks Y
+		ticks_to_useY = np.logspace(np.log10(limits[2]), np.log10(limits[3]), num=14, base=10)
+		ticks_to_useY = np.round(ticks_to_useY, 2)
+		ax.set_yticks(ticks_to_useY)
+		#
 		plt.axis(limits)
 		# plt.show()
-
-	pltCurve(falsePosPerImg, missRate, "falsePosPerImg", "missRate")
+		return
+	# Plot the curve FPPI vs missRate
+	pltCurve(falsePosPerImg, missRate, "falsePosPerImg", "missRate",
+			 scale='log', limits=[0.01, np.amax(falsePosPerImg), 0.01, 1.00])
+	# Save curve img with timestamp
 	plt.savefig(curveImgPathname + '+' + timestr + ".png")
 
 	# cv_results = model_selection.cross_validate(clf, x_train, y_train, cv=3)
