@@ -885,7 +885,7 @@ if __name__ == "__main__":
 			print(boxesPred[np.where(boxesProbas > 0.7)])
 			for box in boxesPred[np.where(boxesProbas > 0.7)]:
 				cv2.rectangle(imgTrue, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
-			cv2.imwrite("boxes", imgTrue)
+			cv2.imwrite("boxes.png", imgTrue)
 			# cv2.waitKey(10)
 			# """ # Display for user
 			# Accumulate stats
