@@ -122,7 +122,7 @@ def GradientHistogram(mag, angle, cellSz=8, binSz=9):
 	binsShape = (mag.shape[0]//cellSz, mag.shape[1]//cellSz, binSz)
 	bins = np.empty(binsShape)
 	# rotate angles 90 degrees clockwise
-	# angle = angle - 90
+	angle = angle - 90
 	# put them on the first and second quadrant
 	angle = (angle) % 180
 	for bins_y in range(bins.shape[0]):
