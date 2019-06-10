@@ -729,119 +729,119 @@ if __name__ == "__main__":
 	# exit()
 	## load files
 	# """"" # Train model
-	### Read positive samples ###
-	start_time = time.time()
+	# ### Read positive samples ###
+	# start_time = time.time()
 
-	if os.path.isfile(x_trainPosPath) and not args.noCache:
-		# read features from disk
-		x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
-	else:
-		# extract windows from the positive test folder
-		# """ # Parallel
-		x_trainPos, y_trainPos = parallelListFunc(
-			 extractFeaturesPos, list(windowsPosTrain), isTupleList=True)
-		""" # Sequential
-		x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
-		# """
-		# save features to disk for faster testing
-		np.save(x_trainPosPath, x_trainPos)
+	# if os.path.isfile(x_trainPosPath) and not args.noCache:
+	# 	# read features from disk
+	# 	x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
+	# else:
+	# 	# extract windows from the positive test folder
+	# 	# """ # Parallel
+	# 	x_trainPos, y_trainPos = parallelListFunc(
+	# 		 extractFeaturesPos, list(windowsPosTrain), isTupleList=True)
+	# 	""" # Sequential
+	# 	x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
+	# 	# """
+	# 	# save features to disk for faster testing
+	# 	np.save(x_trainPosPath, x_trainPos)
 
-	elapsed_time = time.time() - start_time
-	print("%.5f" % elapsed_time, 'Feats Pos')
-	### Read negative samples ###
-	start_time = time.time()
-	# if cache file exists and no argument against
-	if os.path.isfile(x_trainNegPath) and not args.noCache:
-		# read features from disk
-		x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
-	else:
-		# extract features from images
-		# """ # Parallel
-		x_trainNeg, y_trainNeg = parallelListFunc(
-			extractFeaturesNeg, list(imgPathsNegTrain), isTupleList=True)
-		""" # Sequential
-		# x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imgPathsNeg))
-		# """
-		# save features to disk for faster testing
-		np.save(x_trainNegPath, x_trainNeg)
+	# elapsed_time = time.time() - start_time
+	# print("%.5f" % elapsed_time, 'Feats Pos')
+	# ### Read negative samples ###
+	# start_time = time.time()
+	# # if cache file exists and no argument against
+	# if os.path.isfile(x_trainNegPath) and not args.noCache:
+	# 	# read features from disk
+	# 	x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
+	# else:
+	# 	# extract features from images
+	# 	# """ # Parallel
+	# 	x_trainNeg, y_trainNeg = parallelListFunc(
+	# 		extractFeaturesNeg, list(imgPathsNegTrain), isTupleList=True)
+	# 	""" # Sequential
+	# 	# x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imgPathsNeg))
+	# 	# """
+	# 	# save features to disk for faster testing
+	# 	np.save(x_trainNegPath, x_trainNeg)
 
-	elapsed_time = time.time() - start_time
-	print("%.5f" % elapsed_time, 'Feats Neg')
-	# concatenate positive and negative data into the train set
-	print("x_trainNeg.shape", x_trainNeg.shape)
-	print("x_trainPos.shape", x_trainPos.shape)
-	x_train = np.concatenate([x_trainNeg, x_trainPos])
-	y_train = np.concatenate([y_trainNeg, y_trainPos])
-	### Hard negative mining
-	# clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
-	n_estimators = cpuCount
-	clf = sklearn.ensemble.BaggingClassifier(svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced', probability=True), max_samples=1.0 / n_estimators, n_estimators=n_estimators, n_jobs=-1)
-	# first fit to all the postive data and random negative windows
-	# clf.fit(x_train, y_train)
-	# number of epochs of Hard Negative Mining
-	epochN = 2
-	# epochN = 5
-	# for each epoch of hard negative mining
-	for epoch in range(epochN):
-		### Fit classifier to current set
-		start_time = time.time()
+	# elapsed_time = time.time() - start_time
+	# print("%.5f" % elapsed_time, 'Feats Neg')
+	# # concatenate positive and negative data into the train set
+	# print("x_trainNeg.shape", x_trainNeg.shape)
+	# print("x_trainPos.shape", x_trainPos.shape)
+	# x_train = np.concatenate([x_trainNeg, x_trainPos])
+	# y_train = np.concatenate([y_trainNeg, y_trainPos])
+	# ### Hard negative mining
+	# # clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
+	# n_estimators = cpuCount
+	# clf = sklearn.ensemble.BaggingClassifier(svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced', probability=True), max_samples=1.0 / n_estimators, n_estimators=n_estimators, n_jobs=-1)
+	# # first fit to all the postive data and random negative windows
+	# # clf.fit(x_train, y_train)
+	# # number of epochs of Hard Negative Mining
+	# epochN = 2
+	# # epochN = 5
+	# # for each epoch of hard negative mining
+	# for epoch in range(epochN):
+	# 	### Fit classifier to current set
+	# 	start_time = time.time()
 
-		print("epoch: ", epoch)
-		sys.stdout.flush()
-		## train with current set
-		# if last epoch, train with probability enabled
-		# to use Non Max Suppresion afterwards
-		if epoch == epochN-1:
-			print("last epoch, probability enabled")
-			# clf.set_params(probability=True)
-		# train
-		clf.fit(x_train, y_train)
-		# Save model to disk
-		modelBasename = 'classifier'
-		modelExt = '.joblib'
-		modelPath = modelBasename + '+' + time.strftime("%Y%m%d-%H%M") + modelExt
-		print("saving model to ", modelPath)
-		joblib.dump(clf, modelPath)
+	# 	print("epoch: ", epoch)
+	# 	sys.stdout.flush()
+	# 	## train with current set
+	# 	# if last epoch, train with probability enabled
+	# 	# to use Non Max Suppresion afterwards
+	# 	if epoch == epochN-1:
+	# 		print("last epoch, probability enabled")
+	# 		# clf.set_params(probability=True)
+	# 	# train
+	# 	clf.fit(x_train, y_train)
+	# 	# Save model to disk
+	# 	modelBasename = 'classifier'
+	# 	modelExt = '.joblib'
+	# 	modelPath = modelBasename + '+' + time.strftime("%Y%m%d-%H%M") + modelExt
+	# 	print("saving model to ", modelPath)
+	# 	joblib.dump(clf, modelPath)
 
-		elapsed_time = time.time() - start_time
-		print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
-		sys.stdout.flush()
-		### Get hard examples
-		start_time = time.time()
+	# 	elapsed_time = time.time() - start_time
+	# 	print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
+	# 	sys.stdout.flush()
+	# 	### Get hard examples
+	# 	start_time = time.time()
 
-		if epoch == epochN-1:
-			# if last epoch, no need to hardmine
-			break
-		# use classifier on the test set to find hard negatives
-		# scramble background input
-		def scrambled(orig):
-			dest = orig[:]
-			random.shuffle(dest)
-			return dest
-		imgPathsNegShuffled = scrambled(list(imgPathsNegTrain))
-		# get hard negatives
-		print("trying to get hard negatives:", x_train.shape[0])
-		""" # Parallel
-		x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
-			imgPathsNegShuffled, True, clf, x_train.shape[0] / cpuCount)
-		""" # Sequential
-		x_trainNegHard, y_trainNegHard = getNegHard(imgPathsNegShuffled, clf, x_train.shape[0])
-		# """
-		# add hard negatives on the training set
-		print("hard negatives no:", x_trainNegHard.shape)
-		x_train = np.concatenate([x_train, x_trainNegHard])
-		y_train = np.concatenate([y_train, y_trainNegHard])
+	# 	if epoch == epochN-1:
+	# 		# if last epoch, no need to hardmine
+	# 		break
+	# 	# use classifier on the test set to find hard negatives
+	# 	# scramble background input
+	# 	def scrambled(orig):
+	# 		dest = orig[:]
+	# 		random.shuffle(dest)
+	# 		return dest
+	# 	imgPathsNegShuffled = scrambled(list(imgPathsNegTrain))
+	# 	# get hard negatives
+	# 	print("trying to get hard negatives:", x_train.shape[0])
+	# 	""" # Parallel
+	# 	x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
+	# 		imgPathsNegShuffled, True, clf, x_train.shape[0] / cpuCount)
+	# 	""" # Sequential
+	# 	x_trainNegHard, y_trainNegHard = getNegHard(imgPathsNegShuffled, clf, x_train.shape[0])
+	# 	# """
+	# 	# add hard negatives on the training set
+	# 	print("hard negatives no:", x_trainNegHard.shape)
+	# 	x_train = np.concatenate([x_train, x_trainNegHard])
+	# 	y_train = np.concatenate([y_train, y_trainNegHard])
 
-		x_trainNegPathEpoch = x_trainNegPathname + '+' + time.strftime("%Y%m%d-%H%M") + extNp
-		print("saving neg to ", x_trainNegPathEpoch)
-		np.save(x_trainNegPathEpoch, x_trainNeg)
+	# 	x_trainNegPathEpoch = x_trainNegPathname + '+' + time.strftime("%Y%m%d-%H%M") + extNp
+	# 	print("saving neg to ", x_trainNegPathEpoch)
+	# 	np.save(x_trainNegPathEpoch, x_trainNeg)
 
-		elapsed_time = time.time() - start_time
-		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
-		sys.stdout.flush()
-	# end hard negative mining
+	# 	elapsed_time = time.time() - start_time
+	# 	print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
+	# 	sys.stdout.flush()
+	# # end hard negative mining
 	# """"" # Train model
-	""""" # Load a model
+	# """"" # Load a model
 	clf = joblib.load('classifier+20190609-1357.joblib')
 	# """"" # Load a model
 
@@ -853,10 +853,10 @@ if __name__ == "__main__":
 	imgTotalNo = len(boxesPosTest)
 	imgNo = 0
 	imgPathsPosTest = list(imgPathsPosTest)
-	for imgPath in imgPathsPosTest:
-		print(imgPath)
-
-	load.printBoxStats(boxesPosTest)
+	## Print for user
+	# for imgPath in imgPathsPosTest:
+	# 	print(imgPath)
+	# load.printBoxStats(boxesPosTest)
 	# plt.show()
 	try:
 		for imgPath, boxesTrue in zip(imgPathsPosTest, boxesPosTest):
@@ -866,13 +866,15 @@ if __name__ == "__main__":
 			img = cv2.resize(imgTrue, None, fx=imgDownscale, fy=imgDownscale)
 			# Get classifier preditction boxes and their probabilities
 			boxesPred, boxesProbas, windowNo = predictImage(clf, img)
+			# fix axes
 			boxesThreshCopy = boxesPred.copy()
 			boxesThreshCopy[:, 1] = boxesPred[:, 0]
 			boxesThreshCopy[:, 0] = boxesPred[:, 1]
 			boxesThreshCopy[:, 3] = boxesPred[:, 2]
 			boxesThreshCopy[:, 2] = boxesPred[:, 3]
 			boxesPred = boxesThreshCopy.astype(np.int32)
-			boxesPred = boxesPred * 2
+			# fix scale
+			boxesPred = (boxesPred * 1.0/imgDownscale).astype(np.int32)
 			# Compare true boxes with predictions with with a varying threshold
 			result = evaluateImage(boxesPred, boxesProbas, boxesTrue, thresholds)
 			# Make result stats np arrays
@@ -883,8 +885,8 @@ if __name__ == "__main__":
 			print(boxesPred[np.where(boxesProbas > 0.7)])
 			for box in boxesPred[np.where(boxesProbas > 0.7)]:
 				cv2.rectangle(imgTrue, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
-			cv2.imshow("boxes", imgTrue)
-			cv2.waitKey(10)
+			cv2.imwrite("boxes", imgTrue)
+			# cv2.waitKey(10)
 			# """ # Display for user
 			# Accumulate stats
 			truePosTotal += truePosList
@@ -909,6 +911,7 @@ if __name__ == "__main__":
 	falseNegPerImg =  falseNegTotal / imgNo
 	missRate = missRateTotal / imgNo
 
+
 	def pltCurve(valuesX, valuesY, labelX, labelY, scale='log', limits=[0.01, 1.00, 0.01, 1.00]):
 		"""
 		plots a curve, where 
@@ -920,29 +923,36 @@ if __name__ == "__main__":
 		"""
 		import matplotlib.pyplot as plt
 		import matplotlib.ticker
+		plt.style.use('dark_background')
 		axis_min = min(valuesX[0], valuesY[-1])
 		fig, ax = plt.subplots()
 		plt.xlabel(labelX)
 		plt.ylabel(labelY)
 		plt.plot(valuesX, valuesY, '-|')
-		plt.yscale(scale)
+		plt.grid(linestyle='--', alpha=0.5)
 		plt.xscale(scale)
+		plt.yscale(scale)
 		ax.get_xaxis().set_major_formatter(
-					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.2}'.format(y)))
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:0.2f}'.format(y)))
 		ax.get_yaxis().set_major_formatter(
-					matplotlib.ticker.FuncFormatter(lambda y, _: '{:.2}'.format(y)))
+					matplotlib.ticker.FuncFormatter(lambda y, _: '{:0.2f}'.format(y)))
 		# ticks X
-		ticks_to_useX = np.logspace(np.log10(limits[0]), np.log10(limits[1]), num=14, base=10)
+		ticks_to_useX = np.logspace(
+			np.log10(limits[0]), np.log10(limits[1]), num=10, base=10)
 		ticks_to_useX = np.round(ticks_to_useX, 2)
 		ax.set_xticks(ticks_to_useX)
 		# ticks Y
-		ticks_to_useY = np.logspace(np.log10(limits[2]), np.log10(limits[3]), num=14, base=10)
+		ticks_to_useY = np.logspace(
+			np.log10(limits[2]), np.log10(limits[3]), num=10, base=10)
 		ticks_to_useY = np.round(ticks_to_useY, 2)
+		# ax.tick_params(direction='out', length=6, width=2, colors='r', grid_color='r', grid_alpha=0.5)
 		ax.set_yticks(ticks_to_useY)
 		#
 		plt.axis(limits)
 		# plt.show()
 		return
+
+
 	# Plot the curve FPPI vs missRate
 	pltCurve(falsePosPerImg, missRate, "falsePosPerImg", "missRate",
 			 scale='log', limits=[0.01, np.amax(falsePosPerImg), 0.01, 1.00])
