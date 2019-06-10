@@ -121,8 +121,10 @@ def pyramidCreate(image, levelsUp=lvlsUp, levelsDown=lvlsDown, scale=pyrScale):
 def GradientHistogram(mag, angle, cellSz=8, binSz=9):
 	binsShape = (mag.shape[0]//cellSz, mag.shape[1]//cellSz, binSz)
 	bins = np.empty(binsShape)
-	# rotate angles 90 degrees and put them on the first and second quadrant
-	angle = (angle - 90) % 180
+	# rotate angles 90 degrees clockwise
+	# angle = angle - 90
+	# put them on the first and second quadrant
+	angle = (angle) % 180
 	for bins_y in range(bins.shape[0]):
 		for bins_x in range(bins.shape[1]):
 			# for each cell (y,x), slice the mag and angle matrixes
@@ -380,6 +382,36 @@ def extractFeats(img):
 
 		start_time = time.time()
 		print("pyramid lvl: ", argLvl, flush=True)
+
+		## adapted from skimage: https://github.com/scikit-image/scikit-image/blob/master/skimage/feature/_hog.py#L46
+		# visualize = True
+		# if visualize:
+		# 	cellSz = 8
+		# 	binSz = 9
+		# 	mag, angle = gradient(imgLvl)
+		# 	bins = GradientHistogram(mag, angle, cellSz, binSz)
+		# 	import skimage
+		# 	# radius of lines in the cell, 
+		# 	radius = cellSz // 2 - 1
+		# 	orientations_arr = np.arange(binSz)
+		# 	# set dr_arr, dc_arr to correspond to midpoints of orientation bins
+		# 	orientation_bin_midpoints = (np.pi * (orientations_arr + .5) / binSz)
+		# 	dr_arr = radius * np.sin(orientation_bin_midpoints)
+		# 	dc_arr = radius * np.cos(orientation_bin_midpoints)
+		# 	hogImg = np.zeros(imgLvl.shape, dtype=float)
+		# 	for r in range(mag.shape[0]//cellSz):
+		# 			for c in range(mag.shape[1]//cellSz):
+		# 				for o, dr, dc in zip(orientations_arr, dr_arr, dc_arr):
+		# 					centre = tuple([r * cellSz + cellSz // 2,
+		# 											c * cellSz + cellSz // 2])
+		# 					rr, cc = skimage.draw.line(int(centre[0] - dc),
+		# 												int(centre[1] + dr),
+		# 												int(centre[0] + dc),
+		# 												int(centre[1] - dr))
+		# 					hogImg[rr, cc] += bins[r, c, o]
+		# 	# hogImg = exposure.rescale_intensity(hogImg, in_range=(0, 10))
+		# 	cv2.imwrite("hog.png", hogImg)
+		# 	exit()
 
 		# if scale decreases, window increases in relative size
 		# e.g. the window in the 0.5 scaled image has double the size (1/0.5)
