@@ -1,5 +1,7 @@
-This assignment was the hardest to tune parameters since it takes so long to process images, as well as the longest to run test.
+This assignment was the hardest to tune parameters since it takes so long to process images, as well as the longest to run test. Some tests did freeze my pc multiple times.
 On the other hand the implementation was simpler compared to A3.
 Thus making it possible to try and optimize the code using numpy vectorization and multithreading.
 The results of evaluation on this one also weren't very good.
 Miss rate too high even increasing the threshold, trading off false positives per image.
+
+HoG MSE agaisnst cv2.HOGDescriptor 0.020714

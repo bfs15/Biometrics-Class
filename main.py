@@ -40,7 +40,7 @@ NMSThresh = 0.5
 processorN = 4
 boxPredictionThreshold = 0.5
 curveStep = 0.01
-cpuCount = multiprocessing.cpu_count() # // 2
+cpuCount = multiprocessing.cpu_count() // 2
 # pyramid
 lvlsUp = 2
 lvlsDown = 1
@@ -89,8 +89,8 @@ def gradient(img):
 	gx = sobel_filter(img.astype(np.float), 0)
 	gy = sobel_filter(img.astype(np.float), 1)
 	#
-	# gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=1)
-	# gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=1)
+	# gx = cv2.Sobel(img, cv2.CV_32F, 1, 0, ksize=1)
+	# gy = cv2.Sobel(img, cv2.CV_32F, 0, 1, ksize=1)
 	#
 	mag, angle = cv2.cartToPolar(gx, gy, angleInDegrees=True)
 
@@ -132,8 +132,8 @@ def GradientHistogram(mag, angle, cellSz=8, binSz=9):
 						  (bins_x+0)*cellSz: (bins_x+1)*cellSz].flatten()
 			cellAngle = angle[(bins_y+0)*cellSz: (bins_y+1)*cellSz,
 							  (bins_x+0)*cellSz: (bins_x+1)*cellSz].flatten()
-			## tri-linear histogram
 			# initialize histogram
+			# """ # tri-linear histogram
 			hist = np.zeros((binSz))
 			for angleEl, magEl in zip(cellAngle, cellMag):
 				# for each pixel in the cell (its angle and mag)
@@ -146,9 +146,21 @@ def GradientHistogram(mag, angle, cellSz=8, binSz=9):
 				# weight the magnitude by how close to the bin position it is
 				hist[index] = (1-weight)*magEl
 				hist[(index+1) % binSz] = (weight)*magEl
-			## histogram
-			# hist, bin_edges = np.histogram(cellAngle, bins=binSz, range=(0, 180), normed=None, weights=cellMag, density=None)
-			##
+			# """ # no weighting
+			"""
+			hist = np.zeros((binSz))
+			for angleEl, magEl in zip(cellAngle, cellMag):
+				# for each pixel in the cell (its angle and mag)
+				# calculate continuous position in the histogram
+				pos = angleEl/(180/binSz) - 0.5
+				# calculate discrete position in the histogram
+				index = int(math.floor(pos)) % binSz
+				# weight the magnitude by how close to the bin position it is
+				hist[index] = magEl
+			# """
+			""" # np histogram
+			hist, bin_edges = np.histogram(cellAngle, bins=binSz, range=(0, 180), normed=None, weights=cellMag, density=None)
+			# """ #
 			# save the cell histogram in this matrix
 			bins[bins_y, bins_x] = hist
 	# return the cell histogram matrix
@@ -197,7 +209,7 @@ def windowHog(image, blkSz=2, stride=1, cellSz=8, binSz=9):
 	## cv2 style gradient ##
 	# winSize = (64, 128)
 	# blockSize = (blkSz*cellSz, blkSz*cellSz)
-	# blockStride = (8, 8)
+	# blockStride = (cellSz*stride, cellSz*stride)
 	# cellSize = (cellSz, cellSz)
 	# hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize, binSz)
 	# winStride = (8, 8)
@@ -206,14 +218,15 @@ def windowHog(image, blkSz=2, stride=1, cellSz=8, binSz=9):
 	return binsNorm.flatten()
 
 
-def extractWindows(image, stride=8, winSz=(128, 64)):
+def extractWindows(image, stride=8, winSz=(128, 64), borderFrac=4):
 	"""
 	yield (windowNdarray, (startY, startX))
 	"""
-	borderY = winSz[0]//4
-	borderX = winSz[1]//4
-	image = cv2.copyMakeBorder(
-		image, borderY, borderY, borderX, borderX, cv2.BORDER_REPLICATE)
+	if borderFrac > 0:
+		borderY = winSz[0]//borderFrac
+		borderX = winSz[1]//borderFrac
+		image = cv2.copyMakeBorder(
+			image, borderY, borderY, borderX, borderX, cv2.BORDER_REPLICATE)
 	for winBegY in range(0, image.shape[0]-winSz[0], stride):
 		for winBegX in range(0, image.shape[1]-winSz[1], stride):
 			winEndY = winBegY + winSz[0]
@@ -253,8 +266,8 @@ def extractFeaturesNeg(imagesNeg):
 	for image_arg, image in enumerate(imagesNeg):
 		image = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
 		# skip some images for faster testing
-		if not image_arg % 12 == 0:
-			continue
+		# if not image_arg % 6 == 0:
+		# 	continue
 
 		image = np.array(image)
 		# for imageLevel in pyramidCreate(image, 4, 3, 0.1):
@@ -383,6 +396,7 @@ def extractFeats(img):
 		start_time = time.time()
 		print("pyramid lvl: ", argLvl, flush=True)
 
+		## Visualize HoG
 		## adapted from skimage: https://github.com/scikit-image/scikit-image/blob/master/skimage/feature/_hog.py#L46
 		# visualize = True
 		# if visualize:
@@ -411,7 +425,40 @@ def extractFeats(img):
 		# 					hogImg[rr, cc] += bins[r, c, o]
 		# 	# hogImg = exposure.rescale_intensity(hogImg, in_range=(0, 10))
 		# 	cv2.imwrite("hog.png", hogImg)
-		# 	exit()
+
+		# if scale decreases, window increases in relative size
+		# e.g. the window in the 0.5 scaled image has double the size (1/0.5)
+		
+		## Compare CV2 HoG with my implemetaion
+		# compare = True
+		# if compare:
+		# 	cellSz = 8  # px
+		# 	binSz = 9
+		# 	stride = 1  # block stride in cells
+		# 	blkSz = 2  # cells
+		# 	## cv2 style gradient ##
+		# 	winSize = (64, 128)
+		# 	blockSize = (blkSz*cellSz, blkSz*cellSz)
+		# 	blockStride = (cellSz*stride, cellSz*stride)
+		# 	cellSize = (cellSz, cellSz)
+		# 	hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize, binSz)
+
+		# 	normBinsCv2List = []
+		# 	normBinsListWin = []
+		# 	for window, windowBox in extractWindows(imgLvl, stride=8, winSz=(128, 64), borderFrac=0):
+		# 		# my implementation
+		# 		normBins = windowHog(window)
+		# 		normBinsListWin.append(normBins)
+		# 		# cv2
+		# 		normBinsCv2 = hog.compute(window, winStride=(8, 8), padding=(0, 0)).flatten()
+		# 		normBinsCv2List.append(normBinsCv2)
+		# 	# flattten results
+		# 	binsNormCv2Win = np.array(normBinsCv2List).flatten()
+		# 	binsNorm = np.array(normBinsListWin).flatten()
+		# 	# calculate MSE
+		# 	error = binsNormCv2Win.flatten() - binsNorm
+		# 	squaredError = np.square(error)
+		# 	print(squaredError.mean())
 
 		# if scale decreases, window increases in relative size
 		# e.g. the window in the 0.5 scaled image has double the size (1/0.5)
@@ -684,38 +731,48 @@ def getNegHard(imagesNeg, clf, featsLimitNo):
 	return negHardX(featsLimitNo, featuresDimension), negHardY(featsLimitNo,)
 	"""
 	negHardX = None
+	print("Progress: ", end=" ",  flush=True)
+	progressRate = 0.0
 	# slide through images to find hard negatives (false positives)
-	while True:
-		for imgIdx, pathImg in enumerate(imagesNeg):
-			img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
-			img = np.array(img)
-			# list of dimensions (windows, features)
-			winFeats = []
-			# for imgLvl in pyramidCreate(img, 4, 3, 0.1):
-			for imgLvl in pyramidCreate(img):
-				# skip some images for faster testing
-				# if not imgIdx % 100 == 0:
-				#     continue
-				#
-				for win in extractWindowsRandom(imgLvl, 4):
-					winFeat = windowHog(win)
-					winFeats.append(winFeat)
-			# predict windows extracted from image
-			y = clf.predict(winFeats)
-			# select windows which are false positievs
-			winFeats = np.array(winFeats)
-			falsePos = winFeats[np.where(y == classPos)]
-			try:
-				negHardX = np.concatenate([negHardX, falsePos])
-			except ValueError as err:
-				# zero-dimensional arrays cannot be concatenated
-				negHardX = falsePos
+	try:
+		while True:
+			for imgIdx, pathImg in enumerate(imagesNeg):
+				img = cv2.imread(pathImg, cv2.IMREAD_GRAYSCALE)
+				img = np.array(img)
+				# list of dimensions (windows, features)
+				winFeats = []
+				# for imgLvl in pyramidCreate(img, 4, 3, 0.1):
+				for imgLvl in pyramidCreate(img):
+					# skip some images for faster testing
+					# if not imgIdx % 100 == 0:
+					#     continue
+					#
+					for win, winBox in extractWindows(imgLvl):
+						winFeat = windowHog(win)
+						winFeats.append(winFeat)
+				# predict windows extracted from image
+				y = clf.predict(winFeats)
+				# select windows which are false positievs
+				winFeats = np.array(winFeats)
+				falsePos = winFeats[np.where(y == classPos)]
+				try:
+					negHardX = np.concatenate([negHardX, falsePos])
+				except ValueError as err:
+					# zero-dimensional arrays cannot be concatenated
+					negHardX = falsePos
+				# if we have enough features, break out of loop
+				if negHardX.shape[0] > featsLimitNo:
+					break
+				# print progress
+				if negHardX.shape[0]/featsLimitNo > progressRate:
+					progressRate = negHardX.shape[0]/featsLimitNo
+					print(progressRate, end=" ",  flush=True)
 			# if we have enough features, break out of loop
 			if negHardX.shape[0] > featsLimitNo:
 				break
-		# if we have enough features, break out of loop
-		if negHardX.shape[0] > featsLimitNo:
-			break
+	except KeyboardInterrupt as err:
+		print("\nStopped at fraction", negHardX.shape[0]/featsLimitNo)
+		pass
 	negHardY = np.full(negHardX.shape[0], classNeg)
 	return negHardX, negHardY
 
@@ -761,121 +818,126 @@ if __name__ == "__main__":
 	# exit()
 	## load files
 	# """"" # Train model
-	# ### Read positive samples ###
-	# start_time = time.time()
+	### Read positive samples ###
+	start_time = time.time()
 
-	# if os.path.isfile(x_trainPosPath) and not args.noCache:
-	# 	# read features from disk
-	# 	x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
-	# else:
-	# 	# extract windows from the positive test folder
-	# 	# """ # Parallel
-	# 	x_trainPos, y_trainPos = parallelListFunc(
-	# 		 extractFeaturesPos, list(windowsPosTrain), isTupleList=True)
-	# 	""" # Sequential
-	# 	x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
-	# 	# """
-	# 	# save features to disk for faster testing
-	# 	np.save(x_trainPosPath, x_trainPos)
+	if os.path.isfile(x_trainPosPath) and not args.noCache:
+		# read features from disk
+		x_trainPos, y_trainPos = loadFeats(x_trainPosPath, classPos)
+	else:
+		# extract windows from the positive test folder
+		# """ # Parallel
+		x_trainPos, y_trainPos = parallelListFunc(
+			 extractFeaturesPos, list(windowsPosTrain), isTupleList=True)
+		""" # Sequential
+		x_trainPos, y_trainPos = extractFeaturesPos(windowsPosTrain)
+		# """
+		# save features to disk for faster testing
+		np.save(x_trainPosPath, x_trainPos)
 
-	# elapsed_time = time.time() - start_time
-	# print("%.5f" % elapsed_time, 'Feats Pos')
-	# ### Read negative samples ###
-	# start_time = time.time()
-	# # if cache file exists and no argument against
-	# if os.path.isfile(x_trainNegPath) and not args.noCache:
-	# 	# read features from disk
-	# 	x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
-	# else:
-	# 	# extract features from images
-	# 	# """ # Parallel
-	# 	x_trainNeg, y_trainNeg = parallelListFunc(
-	# 		extractFeaturesNeg, list(imgPathsNegTrain), isTupleList=True)
-	# 	""" # Sequential
-	# 	# x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imgPathsNeg))
-	# 	# """
-	# 	# save features to disk for faster testing
-	# 	np.save(x_trainNegPath, x_trainNeg)
+	elapsed_time = time.time() - start_time
+	print("%.5f" % elapsed_time, 'Feats Pos', flush=True)
+	### Read negative samples ###
+	start_time = time.time()
+	# if cache file exists and no argument against
+	if os.path.isfile(x_trainNegPath) and not args.noCache:
+		# read features from disk
+		x_trainNeg, y_trainNeg = loadFeats(x_trainNegPath, classNeg)
+	else:
+		# extract features from images
+		# """ # Parallel
+		x_trainNeg, y_trainNeg = parallelListFunc(
+			extractFeaturesNeg, list(imgPathsNegTrain), isTupleList=True)
+		""" # Sequential
+		# x_trainNeg, y_trainNeg = extractFeaturesNeg(list(imgPathsNeg))
+		# """
+		# save features to disk for faster testing
+		np.save(x_trainNegPath, x_trainNeg)
 
-	# elapsed_time = time.time() - start_time
-	# print("%.5f" % elapsed_time, 'Feats Neg')
-	# # concatenate positive and negative data into the train set
-	# print("x_trainNeg.shape", x_trainNeg.shape)
-	# print("x_trainPos.shape", x_trainPos.shape)
-	# x_train = np.concatenate([x_trainNeg, x_trainPos])
-	# y_train = np.concatenate([y_trainNeg, y_trainPos])
-	# ### Hard negative mining
-	# # clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
-	# n_estimators = cpuCount
-	# clf = sklearn.ensemble.BaggingClassifier(svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced', probability=True), max_samples=1.0 / n_estimators, n_estimators=n_estimators, n_jobs=-1)
-	# # first fit to all the postive data and random negative windows
-	# # clf.fit(x_train, y_train)
-	# # number of epochs of Hard Negative Mining
-	# epochN = 2
-	# # epochN = 5
-	# # for each epoch of hard negative mining
-	# for epoch in range(epochN):
-	# 	### Fit classifier to current set
-	# 	start_time = time.time()
+	elapsed_time = time.time() - start_time
+	print("%.5f" % elapsed_time, 'Feats Neg', flush=True)
+	# concatenate positive and negative data into the train set
+	print("x_trainNeg.shape", x_trainNeg.shape)
+	print("x_trainPos.shape", x_trainPos.shape)
+	x_train = np.concatenate([x_trainNeg, x_trainPos])
+	y_train = np.concatenate([y_trainNeg, y_trainPos])
+	## Get classifier
+	# clf = svm.SVC(C=1, gamma='auto', class_weight='balanced')
 
-	# 	print("epoch: ", epoch)
-	# 	sys.stdout.flush()
-	# 	## train with current set
-	# 	# if last epoch, train with probability enabled
-	# 	# to use Non Max Suppresion afterwards
-	# 	if epoch == epochN-1:
-	# 		print("last epoch, probability enabled")
-	# 		# clf.set_params(probability=True)
-	# 	# train
-	# 	clf.fit(x_train, y_train)
-	# 	# Save model to disk
-	# 	modelBasename = 'classifier'
-	# 	modelExt = '.joblib'
-	# 	modelPath = modelBasename + '+' + time.strftime("%Y%m%d-%H%M") + modelExt
-	# 	print("saving model to ", modelPath)
-	# 	joblib.dump(clf, modelPath)
+	def fitClassifier(clf, x_train, y_train):
+		## train with current set
+		# if last epoch, train with probability enabled
+		# to use Non Max Suppresion afterwards
+		if epoch == epochN-1:
+			print("last epoch, probability enabled")
+			# clf.set_params(probability=True)
+		# train
+		clf.fit(x_train, y_train)
+		# Save model to disk
+		modelBasename = 'classifier'
+		modelExt = '.joblib'
+		modelPath = modelBasename + '+' + time.strftime("%Y%m%d-%H%M") + modelExt
+		print("saving model to ", modelPath)
+		joblib.dump(clf, modelPath)
 
-	# 	elapsed_time = time.time() - start_time
-	# 	print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
-	# 	sys.stdout.flush()
-	# 	### Get hard examples
-	# 	start_time = time.time()
+	""" # new classifier
+	n_estimators = cpuCount
+	clf = sklearn.ensemble.BaggingClassifier(svm.SVC(kernel='linear', C=100, gamma='auto', class_weight='balanced', probability=True), max_samples=1.0 / n_estimators, n_estimators=n_estimators, n_jobs=-1)
 
-	# 	if epoch == epochN-1:
-	# 		# if last epoch, no need to hardmine
-	# 		break
-	# 	# use classifier on the test set to find hard negatives
-	# 	# scramble background input
-	# 	def scrambled(orig):
-	# 		dest = orig[:]
-	# 		random.shuffle(dest)
-	# 		return dest
-	# 	imgPathsNegShuffled = scrambled(list(imgPathsNegTrain))
-	# 	# get hard negatives
-	# 	print("trying to get hard negatives:", x_train.shape[0])
-	# 	""" # Parallel
-	# 	x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
-	# 		imgPathsNegShuffled, True, clf, x_train.shape[0] / cpuCount)
-	# 	""" # Sequential
-	# 	x_trainNegHard, y_trainNegHard = getNegHard(imgPathsNegShuffled, clf, x_train.shape[0])
-	# 	# """
-	# 	# add hard negatives on the training set
-	# 	print("hard negatives no:", x_trainNegHard.shape)
-	# 	x_train = np.concatenate([x_train, x_trainNegHard])
-	# 	y_train = np.concatenate([y_train, y_trainNegHard])
+	# first fit to all the postive data and random negative windows
+	fitClassifier(clf, x_train, y_train)
+	# """  # new classifier
+	# """"" # Load a model
+	# clf = joblib.load('classifier+20190609-1357.joblib')
+	clf = joblib.load('classifier+20190610-1531.joblib')
+	# """""  # Load a model
+	# """""  # hard negative mining
+	# number of epochs of Hard Negative Mining
+	epochN = 1
+	# epochN = 5
+	# for each epoch of hard negative mining
+	for epoch in range(epochN):
+		### Get hard examples
+		start_time = time.time()
+		# use classifier on the test set to find hard negatives
+		# scramble background input
+		def scrambled(orig):
+			dest = orig[:]
+			random.shuffle(dest)
+			return dest
+		imgPathsNegShuffled = scrambled(list(imgPathsNegTrain))
+		# get hard negatives
+		print("trying to get hard negatives:", x_trainNeg.shape[0])
+		# # Parallel
+		# x_trainNegHard, y_trainNegHard = parallelListFuncArgv(getNegHard,
+		# 	imgPathsNegShuffled, True, clf, x_train.shape[0] / cpuCount)
+		# # Sequential
+		x_trainNegHard, y_trainNegHard = getNegHard(imgPathsNegShuffled, clf, x_trainNeg.shape[0])
+		# """
+		# add hard negatives on the training set
+		print("hard negatives no:", x_trainNegHard.shape, flush=True)
+		x_train = np.concatenate([x_train, x_trainNegHard])
+		y_train = np.concatenate([y_train, y_trainNegHard])
 
-	# 	x_trainNegPathEpoch = x_trainNegPathname + '+' + time.strftime("%Y%m%d-%H%M") + extNp
-	# 	print("saving neg to ", x_trainNegPathEpoch)
-	# 	np.save(x_trainNegPathEpoch, x_trainNeg)
+		x_trainNegPathEpoch = x_trainNegPathname + '+' + time.strftime("%Y%m%d-%H%M") + extNp
+		print("saving neg to ", x_trainNegPathEpoch)
+		np.save(x_trainNegPathEpoch, x_trainNeg)
 
-	# 	elapsed_time = time.time() - start_time
-	# 	print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
-	# 	sys.stdout.flush()
-	# # end hard negative mining
+		elapsed_time = time.time() - start_time
+		print("%.5f" % elapsed_time, 'epoch', epoch, 'hard examples')
+		sys.stdout.flush()
+
+		### Fit classifier to current set
+		start_time = time.time()
+		print("epoch: ", epoch, flush=True)
+
+		fitClassifier(clf, x_train, y_train)
+
+		elapsed_time = time.time() - start_time
+		print("%.5f" % elapsed_time, 'epoch', epoch, 'finished')
+		sys.stdout.flush()
+	# end hard negative mining
 	# """"" # Train model
-	# """"" # Load a model
-	clf = joblib.load('classifier+20190609-1357.joblib')
-	# """"" # Load a model
 
 	thresholds = np.arange(boxPredictionThreshold, 1.0-curveStep, curveStep)
 	truePosTotal = np.zeros(thresholds.shape)
@@ -913,7 +975,7 @@ if __name__ == "__main__":
 			truePosList, falsePosList, falseNegList, threshList = map(np.array, result)
 			# Calculate missRateList from raw stats
 			missRateList = falseNegList / (truePosList + falseNegList + 1.0e-07)
-			# """ # Display for user
+			""" # Display for user
 			print(boxesPred[np.where(boxesProbas > 0.7)])
 			for box in boxesPred[np.where(boxesProbas > 0.7)]:
 				cv2.rectangle(imgTrue, tuple(box[:2]), tuple(box[2:]), (0, 255, 0), 3)
